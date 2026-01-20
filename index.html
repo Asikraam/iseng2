@@ -1,0 +1,1236 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OceanPlan - Evaluasi Perkuliahan</title>
+    
+    <!-- 1. Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 2. React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- 3. Babel (untuk JSX) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- 4. Lucide Icons (Library Icon) -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        /* Custom Scrollbar Hide */
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 transition-colors duration-300">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        // --- ICON ADAPTER ---
+        // Helper untuk merender icon Lucide di dalam React tanpa build tool
+        const Icon = ({ icon, size = 24, className = "" }) => {
+            if (!icon) return null;
+            return (
+                <svg 
+                  width={size} 
+                  height={size} 
+                  viewBox="0 0 24 24" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  strokeWidth="2" 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round" 
+                  className={className}
+                >
+                  {icon.map(([tag, attrs], index) => {
+                    return React.createElement(tag, { ...attrs, key: index });
+                  })}
+                </svg>
+            );
+        };
+
+        // Mapping icon names to Lucide definitions
+        const Icons = {
+            BookOpen: lucide.icons.BookOpen,
+            CheckCircle: lucide.icons.CheckCircle,
+            AlertCircle: lucide.icons.AlertCircle,
+            TrendingUp: lucide.icons.TrendingUp,
+            Award: lucide.icons.Award,
+            Brain: lucide.icons.Brain,
+            Save: lucide.icons.Save,
+            BarChart3: lucide.icons.BarChart3,
+            ArrowRightLeft: lucide.icons.ArrowRightLeft,
+            Info: lucide.icons.Info,
+            X: lucide.icons.X,
+            Database: lucide.icons.Database,
+            MessageSquare: lucide.icons.MessageSquare,
+            Send: lucide.icons.Send,
+            RotateCcw: lucide.icons.RotateCcw,
+            Target: lucide.icons.Target,
+            Sparkles: lucide.icons.Sparkles,
+            AlertTriangle: lucide.icons.AlertTriangle,
+            Bot: lucide.icons.Bot,
+            Plus: lucide.icons.Plus,
+            Minus: lucide.icons.Minus,
+            Lock: lucide.icons.Lock,
+            Unlock: lucide.icons.Unlock,
+            Moon: lucide.icons.Moon,
+            Sun: lucide.icons.Sun,
+            Mail: lucide.icons.Mail,
+            PieChart: lucide.icons.PieChart,
+            ChevronDown: lucide.icons.ChevronDown
+        };
+
+        // --- DATA & CONSTANTS ---
+
+        const GRADES = {
+            'A': 4.0, 'AB': 3.5, 'B': 3.0, 'BC': 2.5, 'C': 2.0, 'D': 1.0, 'E': 0.0, 'T': 0.0
+        };
+
+        const TARGET_SKS_LULUS = 144;
+        const TARGET_SKS_WAJIB = 100;
+        const TARGET_SKS_PILIHAN = 44;
+
+        const SPECIALIZATIONS = [
+            { id: 'offshore', name: 'Struktur Bangunan Lepas Pantai', required: ['KL4101', 'KL4102'], desc: 'Fokus pada desain anjungan minyak & gas.' },
+            { id: 'coastal', name: 'Rekayasa & Perlindungan Pantai', required: ['KL4201', 'KL3202'], desc: 'Penanganan abrasi, reklamasi, dan tembok laut.' },
+            { id: 'port', name: 'Pelabuhan & Transportasi Laut', required: ['KL4105', 'KL4205'], desc: 'Perencanaan dermaga dan logistik maritim.' },
+            { id: 'ocean_modelling', name: 'Pemodelan & Hidrodinamika', required: ['KL4202', 'KL2205'], desc: 'Simulasi arus, gelombang, dan tsunami.' },
+            { id: 'geotech', name: 'Geoteknik Kelautan', required: ['KL3103', 'KL3204'], desc: 'Kestabilan dasar laut, pondasi, dan pengerukan.' },
+            { id: 'environment', name: 'Lingkungan Laut', required: ['KL4110'], desc: 'AMDAL, polusi laut, dan konservasi.' },
+            { id: 'energy', name: 'Energi Laut Terbarukan', required: ['KL4108', 'KL4208'], desc: 'Pembangkit listrik tenaga arus/gelombang.' },
+            { id: 'acoustics', name: 'Akustik Bawah Air', required: ['KL3104'], desc: 'Sonar, pemetaan dasar laut, dan instrumentasi.' },
+        ];
+
+        const CURRICULUM_DB = [
+            // TPB
+            { code: 'MA1101', name: 'Matematika IA', sks: 4, semester: 1, type: 'Wajib', prereq: [] },
+            { code: 'FI1101', name: 'Fisika Dasar IA', sks: 4, semester: 1, type: 'Wajib', prereq: [] },
+            { code: 'KI1101', name: 'Kimia Dasar IA', sks: 3, semester: 1, type: 'Wajib', prereq: [] },
+            { code: 'KU1102', name: 'Pengenalan Komputasi', sks: 3, semester: 1, type: 'Wajib', prereq: [] },
+            { code: 'KU1011', name: 'Tata Tulis Karya Ilmiah', sks: 2, semester: 1, type: 'Wajib', prereq: [] },
+            
+            { code: 'MA1201', name: 'Matematika IIA', sks: 4, semester: 2, type: 'Wajib', prereq: ['MA1101'] },
+            { code: 'FI1201', name: 'Fisika Dasar IIA', sks: 4, semester: 2, type: 'Wajib', prereq: ['FI1101'] },
+            { code: 'KI1201', name: 'Kimia Dasar IIA', sks: 3, semester: 2, type: 'Wajib', prereq: ['KI1101'] },
+            { code: 'KU1202', name: 'Pengantar Rekayasa & Desain', sks: 2, semester: 2, type: 'Wajib', prereq: [] },
+            { code: 'KU1024', name: 'Bahasa Inggris', sks: 2, semester: 2, type: 'Wajib', prereq: [] },
+
+            // Tahun 2
+            { code: 'KL2101', name: 'Matematika Teknik I', sks: 3, semester: 3, type: 'Wajib', prereq: ['MA1201'] },
+            { code: 'KL2102', name: 'Mekanika Fluida', sks: 4, semester: 3, type: 'Wajib', prereq: ['FI1101'] },
+            { code: 'KL2103', name: 'Statika Struktur', sks: 3, semester: 3, type: 'Wajib', prereq: ['FI1101'] },
+            { code: 'KL2104', name: 'Geologi Laut', sks: 2, semester: 3, type: 'Wajib', prereq: [] },
+            { code: 'KL2105', name: 'Material Laut & Korosi', sks: 2, semester: 3, type: 'Wajib', prereq: ['KI1101'] },
+
+            { code: 'KL2201', name: 'Matematika Teknik II', sks: 3, semester: 4, type: 'Wajib', prereq: ['KL2101'] },
+            { code: 'KL2202', name: 'Hidrodinamika', sks: 3, semester: 4, type: 'Wajib', prereq: ['KL2102'] },
+            { code: 'KL2203', name: 'Mekanika Material', sks: 3, semester: 4, type: 'Wajib', prereq: ['KL2103'] },
+            { code: 'KL2204', name: 'Oseanografi Fisik', sks: 3, semester: 4, type: 'Wajib', prereq: ['MA1201'] },
+            { code: 'KL2205', name: 'Metode Numerik Kelautan', sks: 2, semester: 4, type: 'Wajib', prereq: ['KU1102'] },
+
+            // Tahun 3
+            { code: 'KL3101', name: 'Analisis Struktur Metode Matriks', sks: 3, semester: 5, type: 'Wajib', prereq: ['KL2203'] },
+            { code: 'KL3102', name: 'Gelombang Laut', sks: 3, semester: 5, type: 'Wajib', prereq: ['KL2202'] },
+            { code: 'KL3103', name: 'Mekanika Tanah Laut', sks: 3, semester: 5, type: 'Wajib', prereq: [] },
+            { code: 'KL3104', name: 'Dinamika Struktur', sks: 3, semester: 5, type: 'Wajib', prereq: ['KL2103', 'KL2101'] },
+            { code: 'KL3001', name: 'Probabilitas & Statistik Kelautan', sks: 2, semester: 5, type: 'Wajib', flex: true, prereq: ['MA1201'] },
+
+            { code: 'KL3201', name: 'Desain Struktur Baja', sks: 3, semester: 6, type: 'Wajib', prereq: ['KL3101'] },
+            { code: 'KL3202', name: 'Bangunan Pantai', sks: 3, semester: 6, type: 'Wajib', prereq: ['KL3102'] },
+            { code: 'KL3203', name: 'Desain Struktur Beton', sks: 3, semester: 6, type: 'Wajib', prereq: ['KL3101'] },
+            { code: 'KL3204', name: 'Pondasi Laut', sks: 2, semester: 6, type: 'Wajib', prereq: ['KL3103'] },
+
+            // Tahun 4 (Pilihan & Spesialisasi)
+            { code: 'KL4101', name: 'Dinamika Struktur Lepas Pantai', sks: 3, semester: 7, type: 'Pilihan', prereq: ['KL3104'] },
+            { code: 'KL4201', name: 'Manajemen Wilayah Pesisir', sks: 3, semester: 7, type: 'Pilihan', prereq: [] },
+            { code: 'KL4105', name: 'Perencanaan Pelabuhan', sks: 3, semester: 7, type: 'Pilihan', prereq: ['KL3202'] },
+            { code: 'KL4108', name: 'Energi Arus & Gelombang', sks: 3, semester: 7, type: 'Pilihan', prereq: ['KL3102'] },
+            { code: 'KL4110', name: 'AMDAL & Lingkungan Laut', sks: 3, semester: 7, type: 'Pilihan', prereq: [] },
+            { code: 'KL4090', name: 'Kerja Praktek', sks: 2, semester: 7, type: 'Wajib', prereq: ['KL3101', 'KL3102'] },
+            { code: 'KL4098', name: 'Tugas Akhir I (Proposal)', sks: 2, semester: 7, type: 'Wajib', prereq: ['KL4090'] },
+
+            { code: 'KL4102', name: 'Desain Anjungan Lepas Pantai', sks: 3, semester: 8, type: 'Pilihan', prereq: ['KL4101'] },
+            { code: 'KL4202', name: 'Model Numerik Pantai', sks: 3, semester: 8, type: 'Pilihan', prereq: ['KL3202'] },
+            { code: 'KL4205', name: 'Operasional Pelabuhan', sks: 3, semester: 8, type: 'Pilihan', prereq: ['KL4105'] },
+            { code: 'KL4208', name: 'Sistem Konversi Energi Laut', sks: 3, semester: 8, type: 'Pilihan', prereq: ['KL4108'] },
+            { code: 'KL4099', name: 'Tugas Akhir II (Sidang)', sks: 4, semester: 8, type: 'Wajib', prereq: ['KL4098'] },
+        ];
+
+        const MAX_SKS_ABSOLUTE = 24;
+
+        // --- SUB COMPONENTS ---
+
+        const SimpleLineChart = ({ data, darkMode }) => {
+            if (!data || data.length === 0) return null;
+            const height = 100;
+            const width = 300;
+            const maxVal = 4.0;
+            
+            const points = data.map((d, i) => {
+                const x = (i / (data.length - 1 || 1)) * width;
+                const y = height - (d.nr / maxVal) * height;
+                return `${x},${y}`;
+            }).join(' ');
+
+            const gridColor = darkMode ? "#334155" : "#e2e8f0"; 
+            const lineColor = "#6366f1"; 
+            const dotFill = darkMode ? "#1e293b" : "white";
+
+            return (
+                <div className="w-full h-32 relative">
+                <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
+                    <line x1="0" y1={height * 0.25} x2={width} y2={height * 0.25} stroke={gridColor} strokeDasharray="4" />
+                    <line x1="0" y1={height * 0.5} x2={width} y2={height * 0.5} stroke={gridColor} strokeDasharray="4" />
+                    <line x1="0" y1={height * 0.75} x2={width} y2={height * 0.75} stroke={gridColor} strokeDasharray="4" />
+                    <line x1="0" y1={height * 1.0} x2={width} y2={height * 1.0} stroke={gridColor} strokeDasharray="4" />
+                    <polyline points={points} fill="none" stroke={lineColor} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                    {data.map((d, i) => {
+                    const x = (i / (data.length - 1 || 1)) * width;
+                    const y = height - (d.nr / maxVal) * height;
+                    return (
+                        <g key={i} className="group">
+                        <circle cx={x} cy={y} r="4" fill={dotFill} stroke={lineColor} strokeWidth="2" />
+                        <text x={x} y={y - 10} textAnchor="middle" fontSize="10" className={`opacity-0 group-hover:opacity-100 font-bold transition-opacity ${darkMode ? 'fill-slate-200' : 'fill-slate-600'}`}>
+                            {d.nr.toFixed(2)}
+                        </text>
+                        </g>
+                    );
+                    })}
+                </svg>
+                <div className={`flex justify-between text-xs mt-2 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                    {data.map((d, i) => <span key={i}>Sem {d.sem}</span>)}
+                </div>
+                </div>
+            );
+        };
+
+        const ProgressBar = ({ label, current, max, colorClass, darkMode }) => (
+            <div className="mb-3">
+                <div className="flex justify-between text-xs mb-1">
+                    <span className={darkMode ? 'text-slate-300' : 'text-slate-600'}>{label}</span>
+                    <span className={`font-bold ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>{current} / {max}</span>
+                </div>
+                <div className={`w-full h-2 rounded-full ${darkMode ? 'bg-slate-700' : 'bg-slate-200'}`}>
+                    <div 
+                        className={`h-full rounded-full transition-all duration-500 ${colorClass}`} 
+                        style={{ width: `${Math.min((current/max)*100, 100)}%` }}
+                    ></div>
+                </div>
+            </div>
+        );
+
+        const Card = ({ children, className = "", darkMode }) => (
+            <div className={`rounded-xl border shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-900'} ${className}`}>
+                {children}
+            </div>
+        );
+
+        // --- MAIN APP ---
+
+        const App = () => {
+            const [activeTab, setActiveTab] = useState('dashboard');
+            const [alert, setAlert] = useState(null); 
+            const [darkMode, setDarkMode] = useState(false);
+            const [plannerMode, setPlannerMode] = useState('recommendation');
+            const [showElectiveModal, setShowElectiveModal] = useState(null); 
+
+            const [profile, setProfile] = useState({
+                name: 'User',
+                currentSemester: 3, 
+                targetSpecializations: ['offshore', 'coastal'] 
+            });
+
+            const [history, setHistory] = useState({});
+            const [movedCourses, setMovedCourses] = useState({}); 
+            const [retakePlan, setRetakePlan] = useState({}); 
+            const [retakeGrades, setRetakeGrades] = useState({});
+            const [plannerSelection, setPlannerSelection] = useState([]);
+
+            // AI Chat State
+            const [messages, setMessages] = useState([]);
+            const [chatInput, setChatInput] = useState('');
+            const chatEndRef = useRef(null);
+            const [isTyping, setIsTyping] = useState(false);
+
+            // LOGIC
+            const getCourseSemester = (course) => movedCourses[course.code] !== undefined ? movedCourses[course.code] : course.semester;
+            const getUnlockList = (code) => CURRICULUM_DB.filter(c => c.prereq.includes(code)).map(c => c.code);
+            const getSpecIntersections = (code) => SPECIALIZATIONS.filter(s => s.required.includes(code)).map(s => s.name);
+            const isSpecializationCourse = (code) => SPECIALIZATIONS.some(s => s.required.includes(code));
+            const isMandatoryCurrent = (course) => {
+                const effectiveSem = getCourseSemester(course);
+                return course.type === 'Wajib' && effectiveSem === profile.currentSemester;
+            };
+
+            const semesterStats = useMemo(() => {
+                const statsBySem = {}; 
+                const allSemesters = [1, 2, 3, 4, 5, 6, 7, 8];
+                allSemesters.forEach(sem => {
+                    statsBySem[sem] = { totalSks: 0, totalPoints: 0, nr: 0, count: 0, retakeSks: 0 };
+                });
+
+                let sksLulusWajib = 0;
+                let sksLulusPilihan = 0;
+
+                CURRICULUM_DB.forEach(course => {
+                    const effectiveSem = getCourseSemester(course);
+                    const grade = history[course.code];
+                    
+                    if (grade && GRADES[grade] >= 2.0) {
+                        if (course.type === 'Wajib') sksLulusWajib += course.sks;
+                        else sksLulusPilihan += course.sks;
+                    }
+
+                    if (effectiveSem >= 1 && effectiveSem <= 8) {
+                        if (grade && GRADES[grade] !== undefined) {
+                            statsBySem[effectiveSem].totalSks += course.sks;
+                            statsBySem[effectiveSem].totalPoints += (course.sks * GRADES[grade]);
+                            statsBySem[effectiveSem].count += 1;
+                        }
+                    }
+                });
+
+                Object.entries(retakePlan).forEach(([code, targetSem]) => {
+                    const course = CURRICULUM_DB.find(c => c.code === code);
+                    const plannedGrade = retakeGrades[code];
+                    if (course && statsBySem[targetSem]) {
+                        statsBySem[targetSem].retakeSks += course.sks;
+                        if (plannedGrade && GRADES[plannedGrade] !== undefined) {
+                            statsBySem[targetSem].totalSks += course.sks;
+                            statsBySem[targetSem].totalPoints += (course.sks * GRADES[plannedGrade]);
+                            statsBySem[targetSem].count += 1;
+                        }
+                    }
+                });
+
+                const graphData = [];
+                let cumulativePoints = 0;
+                let cumulativeSks = 0;
+                allSemesters.forEach(sem => {
+                    const s = statsBySem[sem];
+                    if (s.totalSks > 0) {
+                        s.nr = s.totalPoints / s.totalSks;
+                        cumulativePoints += s.totalPoints;
+                        cumulativeSks += s.totalSks;
+                        if (sem < profile.currentSemester || (sem === profile.currentSemester && s.count > 0)) {
+                            graphData.push({ sem: sem, nr: s.nr });
+                        }
+                    }
+                });
+
+                const ipk = cumulativeSks > 0 ? (cumulativePoints / cumulativeSks).toFixed(2) : "0.00";
+                
+                return { 
+                    bySem: statsBySem, graphData, ipk, totalSks: cumulativeSks, 
+                    sksLulusWajib, sksLulusPilihan, maxSksNext: MAX_SKS_ABSOLUTE 
+                };
+            }, [history, profile.currentSemester, movedCourses, retakePlan, retakeGrades]);
+
+            const showAlert = (msg) => {
+                setAlert(msg);
+                setTimeout(() => setAlert(null), 3000);
+            };
+
+            const getSemesterLoad = (sem) => {
+                const regularLoad = CURRICULUM_DB.filter(c => getCourseSemester(c) === sem).reduce((acc, curr) => acc + curr.sks, 0);
+                const retakeLoad = Object.entries(retakePlan).filter(([_, tSem]) => tSem === sem).map(([code, _]) => CURRICULUM_DB.find(c => c.code === code)).reduce((acc, curr) => acc + (curr ? curr.sks : 0), 0);
+                return regularLoad + retakeLoad;
+            };
+
+            const moveCourse = (courseCode, newSem) => {
+                const course = CURRICULUM_DB.find(c => c.code === courseCode);
+                const currentLoad = getSemesterLoad(newSem);
+                if (currentLoad + course.sks > MAX_SKS_ABSOLUTE) {
+                    showAlert(`Gagal Pindah! Semester ${newSem} penuh.`);
+                    return;
+                }
+                setMovedCourses(prev => ({...prev, [courseCode]: parseInt(newSem)}));
+                setShowElectiveModal(null);
+            };
+
+            const planRetake = (courseCode, targetSem) => {
+                const course = CURRICULUM_DB.find(c => c.code === courseCode);
+                const currentLoad = getSemesterLoad(targetSem);
+                if (currentLoad + course.sks > MAX_SKS_ABSOLUTE) {
+                    showAlert(`Gagal Retake! Semester ${targetSem} penuh.`);
+                    return;
+                }
+                setRetakePlan(prev => ({...prev, [courseCode]: parseInt(targetSem)}));
+            };
+
+            const cancelRetake = (courseCode) => {
+                setRetakePlan(prev => { const n = {...prev}; delete n[courseCode]; return n; });
+                setRetakeGrades(prev => { const n = {...prev}; delete n[courseCode]; return n; });
+            };
+
+            const autoFillPreviousSemesters = () => {
+                const newHistory = { ...history };
+                CURRICULUM_DB.forEach(c => {
+                    const sem = getCourseSemester(c);
+                    if (sem < profile.currentSemester) {
+                        if (!newHistory[c.code]) newHistory[c.code] = 'B'; 
+                    }
+                });
+                setHistory(newHistory);
+            };
+
+            const toggleSpecialization = (id) => {
+                setProfile(prev => {
+                    const current = prev.targetSpecializations;
+                    if (current.includes(id)) return { ...prev, targetSpecializations: current.filter(x => x !== id) };
+                    if (current.length >= 3) return prev; 
+                    return { ...prev, targetSpecializations: [...current, id] };
+                });
+            };
+
+            // --- PLANNER LOGIC ---
+            const availableCourses = useMemo(() => {
+                return CURRICULUM_DB.filter(c => {
+                    const grade = history[c.code];
+                    const isPassed = grade && GRADES[grade] >= 2.0; 
+                    if (isPassed) return false; 
+                    const prereqMet = c.prereq.every(pCode => {
+                        const pGrade = history[pCode];
+                        return pGrade && GRADES[pGrade] >= 1.0; 
+                    });
+                    if (!prereqMet) return false; 
+                    return true; 
+                });
+            }, [history]);
+
+            const recommendedCourses = useMemo(() => {
+                const candidates = availableCourses;
+                let scored = candidates.map(c => {
+                    let score = 0;
+                    let reason = [];
+                    const currentGrade = history[c.code];
+                    const effectiveSem = getCourseSemester(c);
+
+                    if (currentGrade && GRADES[currentGrade] < 1.0) {
+                        score += 500; reason.push("WAJIB MENGULANG");
+                    } else if (currentGrade === 'D') {
+                        score += 300; reason.push("PERBAIKAN D");
+                    }
+
+                    let specHits = 0;
+                    profile.targetSpecializations.forEach(targetId => {
+                        const targetSpec = SPECIALIZATIONS.find(s => s.id === targetId);
+                        if (targetSpec && targetSpec.required.includes(c.code)) {
+                            specHits++; score += 200; reason.push(`Syarat: ${targetSpec.name.split(' ')[0]}...`);
+                        }
+                    });
+                    if (specHits > 1) { score += 150; reason.push("🔥 IRISAN SPESIALISASI"); }
+
+                    const unlocksCount = CURRICULUM_DB.filter(db => db.prereq.includes(c.code)).length;
+                    if (unlocksCount > 0) { score += 50 * unlocksCount; reason.push(`Unlock ${unlocksCount} Matkul`); }
+
+                    if (effectiveSem === profile.currentSemester) { score += 150; } 
+                    else if (effectiveSem < profile.currentSemester) { score += 100; reason.push("Hutang Semester Bawah"); }
+
+                    return { ...c, score, reason, effectiveSem };
+                });
+                return scored.sort((a, b) => b.score - a.score);
+            }, [availableCourses, history, profile, movedCourses]);
+
+            const toggleCourseInPlan = (course) => {
+                setPlannerSelection(prev => {
+                    if (prev.includes(course.code)) return prev.filter(c => c !== course.code);
+                    const currentSks = prev.reduce((acc, code) => acc + (CURRICULUM_DB.find(x => x.code === code)?.sks || 0), 0);
+                    if (currentSks + course.sks > MAX_SKS_ABSOLUTE) {
+                        showAlert("Draft Plan Penuh! Hapus matkul lain dulu.");
+                        return prev;
+                    }
+                    return [...prev, course.code];
+                });
+            };
+
+            const planFeedback = useMemo(() => {
+                const warnings = []; const infos = [];
+                const mandatoryCourses = recommendedCourses.filter(c => isMandatoryCurrent(c));
+                const missingMandatory = mandatoryCourses.filter(c => !plannerSelection.includes(c.code));
+                if (missingMandatory.length > 0) warnings.push(`⚠️ PERINGATAN KERAS: Kamu membuang ${missingMandatory.length} Matkul Wajib Semester Ini (${missingMandatory.map(c=>c.code).join(', ')}).`);
+
+                plannerSelection.forEach(code => {
+                    const course = CURRICULUM_DB.find(c => c.code === code);
+                    const intersections = getSpecIntersections(code);
+                    const userSpecs = profile.targetSpecializations.map(id => SPECIALIZATIONS.find(s=>s.id===id)?.name);
+                    const isRelevant = intersections.some(specName => userSpecs.includes(specName));
+                    if (!isRelevant && course.type === 'Pilihan' && intersections.length > 0) {
+                        infos.push(`ℹ️ ${course.name} sebenarnya untuk spesialisasi ${intersections[0]}, bukan targetmu. Yakin ambil?`);
+                    }
+                });
+                return { warnings, infos };
+            }, [plannerSelection, recommendedCourses, profile.targetSpecializations]);
+
+            // --- CHAT LOGIC ---
+            const generateLLMLikeResponse = (input) => {
+                const lower = input.toLowerCase();
+                if (lower.includes('sks') || lower.includes('kurang') || lower.includes('lulus')) {
+                    const sisa = TARGET_SKS_LULUS - semesterStats.totalSks;
+                    return `Total SKS lulusmu: **${semesterStats.totalSks}**. Kurang **${sisa} SKS** lagi untuk lulus. \nPastikan ambil matkul pilihan luar jika matkul pilihan dalam sudah habis.`;
+                }
+                if (lower.includes('wajib') || lower.includes('buang') || lower.includes('drop')) {
+                    const mandatory = recommendedCourses.filter(c => isMandatoryCurrent(c));
+                    return `Matkul Wajib adalah fondasi. Semester ini kamu wajib ambil: **${mandatory.map(c=>c.name).join(', ')}**.`;
+                }
+                const courseMatch = input.toUpperCase().match(/([A-Z]{2}\d{4})/);
+                if (courseMatch) {
+                    const code = courseMatch[0];
+                    const course = CURRICULUM_DB.find(c => c.code === code);
+                    if (course) {
+                        const unlocks = getUnlockList(code);
+                        const specs = getSpecIntersections(code);
+                        return `**Analisis ${code} (${course.name}):**\n- Status: ${isMandatoryCurrent(course) ? '🔴 WAJIB SEM INI' : course.type}\n- Membuka: ${unlocks.length > 0 ? unlocks.join(', ') : 'Tidak ada'}\n- Irisan: ${specs.length > 0 ? specs.join(', ') : 'Umum'}\n- Saran: ${specs.length > 1 ? '🔥 Sangat direkomendasikan karena irisan!' : 'Ambil sesuai minat.'}`;
+                    }
+                }
+                if (lower.includes('irisan') || lower.includes('unlock')) {
+                    return `Di tab Strategi, perhatikan badge "Unlocks" dan "Irisan". Matkul yang membuka banyak jalan atau memenuhi 2 syarat spesialisasi adalah **High Value Investment**!`;
+                }
+                return `Saya OceanAI. Coba tanya "Berapa SKS lagi saya lulus?", "Analisis KL4101", atau "Apa irisan spesialisasi saya?".`;
+            };
+
+            const handleSendMessage = () => {
+                if (!chatInput.trim()) return;
+                const userText = chatInput;
+                setMessages(prev => [...prev, { role: 'user', text: userText }]);
+                setChatInput('');
+                setIsTyping(true);
+                setTimeout(() => {
+                    const response = generateLLMLikeResponse(userText);
+                    setMessages(prev => [...prev, { role: 'ai', text: response }]);
+                    setIsTyping(false);
+                }, 800);
+            };
+            
+            useEffect(() => {
+                chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }, [messages, isTyping]);
+
+            // --- RENDER HELPERS ---
+            
+            return (
+                <div className={`min-h-screen font-sans pb-10 flex flex-col transition-colors duration-300 ${darkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
+                    
+                    {/* Alert Toast */}
+                    {alert && (
+                        <div className="fixed top-20 right-4 z-50 bg-red-600 text-white px-4 py-3 rounded-lg shadow-xl flex items-center gap-3 animate-in slide-in-from-right duration-300">
+                            <Icon icon={Icons.AlertTriangle} className="w-5 h-5"/>
+                            <span className="font-bold">{alert}</span>
+                        </div>
+                    )}
+
+                    <header className={`border-b sticky top-0 z-20 shadow-sm transition-colors ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+                        <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <div className="bg-indigo-600 text-white p-1.5 rounded-lg shadow-indigo-200 shadow-lg">
+                                <Icon icon={Icons.BookOpen} className="w-5 h-5" />
+                            </div>
+                            <h1 className="font-bold text-xl tracking-tight">Ocean<span className="text-indigo-500">Plan</span> v11</h1>
+                        </div>
+                        
+                        <button 
+                            onClick={() => setDarkMode(!darkMode)}
+                            className={`p-2 rounded-full transition-colors ${darkMode ? 'bg-slate-800 text-yellow-400 hover:bg-slate-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                        >
+                            {darkMode ? <Icon icon={Icons.Sun} className="w-5 h-5"/> : <Icon icon={Icons.Moon} className="w-5 h-5"/>}
+                        </button>
+                        </div>
+                    </header>
+
+                    <main className="max-w-5xl mx-auto px-4 py-8 flex-1">
+                        <div className="flex gap-2 mb-8 overflow-x-auto pb-2 scrollbar-hide">
+                            {[
+                                { id: 'dashboard', label: 'Dashboard', icon: Icons.BarChart3 },
+                                { id: 'input', label: 'Transkrip & Retake', icon: Icons.Save },
+                                { id: 'planner', label: 'Strategi', icon: Icons.Target },
+                                { id: 'library', label: 'Library', icon: Icons.Database },
+                                { id: 'assistant', label: 'Assistant', icon: Icons.MessageSquare },
+                            ].map(tab => (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id)}
+                                    className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-medium transition-all whitespace-nowrap ${
+                                        activeTab === tab.id 
+                                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 scale-105' 
+                                        : (darkMode ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200')
+                                    }`}
+                                >
+                                    <Icon icon={tab.icon} className="w-4 h-4" />
+                                    {tab.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            {/* DASHBOARD */}
+                            {activeTab === 'dashboard' && (
+                                <div className="space-y-6">
+                                    <Card darkMode={darkMode} className="p-6 flex flex-col md:flex-row justify-between items-center gap-4">
+                                        <div>
+                                            <h2 className="text-xl font-bold">Evaluasi Akademik</h2>
+                                            <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Hai {profile.name}, semangat mengejar target wisuda!</p>
+                                        </div>
+                                        <div className={`flex items-center gap-3 px-4 py-2 rounded-lg border ${darkMode ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                                            <span className={`text-sm font-medium ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>Semester Saat Ini:</span>
+                                            <select 
+                                                value={profile.currentSemester}
+                                                onChange={(e) => setProfile(p => ({...p, currentSemester: parseInt(e.target.value)}))}
+                                                className={`border rounded px-2 py-1 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 ${darkMode ? 'bg-slate-800 border-slate-600 text-indigo-400' : 'bg-white border-slate-300 text-indigo-600'}`}
+                                            >
+                                                {[1,2,3,4,5,6,7,8].map(s => <option key={s} value={s}>{s}</option>)}
+                                            </select>
+                                        </div>
+                                    </Card>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        <div className="md:col-span-2">
+                                            <Card darkMode={darkMode} className="p-6 h-full">
+                                                <div className="flex justify-between items-center mb-4">
+                                                    <h3 className="font-bold flex items-center gap-2">
+                                                        <Icon icon={Icons.TrendingUp} className="w-5 h-5 text-indigo-500"/>
+                                                        Grafik Indeks Prestasi (IP)
+                                                    </h3>
+                                                    <div className="text-right">
+                                                        <div className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>IPK Kumulatif</div>
+                                                        <div className="text-2xl font-bold text-indigo-500">{semesterStats.ipk}</div>
+                                                    </div>
+                                                </div>
+                                                {semesterStats.graphData.length > 0 ? (
+                                                    <SimpleLineChart data={semesterStats.graphData} darkMode={darkMode} />
+                                                ) : (
+                                                    <div className={`h-32 flex items-center justify-center rounded border border-dashed ${darkMode ? 'text-slate-500 bg-slate-900 border-slate-700' : 'text-slate-400 bg-slate-50 border-slate-200'}`}>
+                                                        Belum ada data nilai.
+                                                    </div>
+                                                )}
+                                            </Card>
+                                        </div>
+
+                                        <Card darkMode={darkMode} className="p-6 flex flex-col justify-between">
+                                            <div>
+                                                <h3 className="font-bold flex items-center gap-2 mb-4">
+                                                    <Icon icon={Icons.PieChart} className="w-5 h-5 text-indigo-500"/>
+                                                    Progress Kelulusan
+                                                </h3>
+                                                <ProgressBar label="Total SKS" current={semesterStats.totalSks} max={TARGET_SKS_LULUS} colorClass="bg-indigo-500" darkMode={darkMode} />
+                                                <ProgressBar label="SKS Wajib" current={semesterStats.sksLulusWajib} max={TARGET_SKS_WAJIB} colorClass="bg-emerald-500" darkMode={darkMode} />
+                                                <ProgressBar label="SKS Pilihan" current={semesterStats.sksLulusPilihan} max={TARGET_SKS_PILIHAN} colorClass="bg-orange-500" darkMode={darkMode} />
+                                                
+                                                <div className={`text-xs mt-2 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                                                    *Estimasi berdasarkan target 144 SKS.
+                                                </div>
+                                            </div>
+                                        </Card>
+                                    </div>
+
+                                    <Card darkMode={darkMode} className="p-6">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h3 className="text-lg font-bold flex items-center gap-2">
+                                            <Icon icon={Icons.Award} className="w-5 h-5 text-indigo-500" />
+                                            Target Spesialisasi (Pilih Max 3)
+                                            </h3>
+                                            <span className="text-xs font-bold bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full">
+                                                {profile.targetSpecializations.length}/3
+                                            </span>
+                                        </div>
+                                        
+                                        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-3">
+                                        {SPECIALIZATIONS.map(spec => {
+                                            const isSelected = profile.targetSpecializations.includes(spec.id);
+                                            const isDisabled = !isSelected && profile.targetSpecializations.length >= 3;
+
+                                            return (
+                                                <button
+                                                key={spec.id}
+                                                disabled={isDisabled}
+                                                onClick={() => toggleSpecialization(spec.id)}
+                                                className={`p-3 rounded-lg border text-sm text-left transition-all relative overflow-hidden group ${
+                                                    isSelected
+                                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-md ring-2 ring-indigo-200'
+                                                    : isDisabled 
+                                                        ? (darkMode ? 'bg-slate-900 text-slate-600 border-slate-800' : 'bg-slate-50 text-slate-400 border-slate-100') + ' cursor-not-allowed opacity-60'
+                                                        : (darkMode ? 'bg-slate-800 text-slate-300 border-slate-700 hover:border-indigo-500 hover:bg-slate-750' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:bg-slate-50')
+                                                }`}
+                                                >
+                                                <div className="flex justify-between items-start">
+                                                    <div className="font-semibold mb-1 pr-4">{spec.name}</div>
+                                                    {isSelected && <Icon icon={Icons.CheckCircle} className="w-4 h-4 text-indigo-200 flex-shrink-0" />}
+                                                </div>
+                                                </button>
+                                            );
+                                        })}
+                                        </div>
+                                    </Card>
+                                </div>
+                            )}
+
+                            {/* TRANSKRIP & INPUT */}
+                            {activeTab === 'input' && (
+                                <div className="space-y-6">
+                                    <div className={`border p-4 rounded-lg flex flex-col md:flex-row md:items-center justify-between gap-4 ${darkMode ? 'bg-indigo-900/30 border-indigo-800 text-indigo-200' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>
+                                        <div className="flex items-start gap-3">
+                                            <Icon icon={Icons.Info} className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                                            <div className="text-sm">
+                                                <p><strong>Limit SKS:</strong> Kamu tidak bisa merencanakan lebih dari 24 SKS per semester.</p>
+                                                <p><strong>Matkul Pilihan:</strong> Gunakan tombol <span className="font-bold">+ Ambil Pilihan</span> untuk menambah matkul dari semester lain ke semester ini.</p>
+                                            </div>
+                                        </div>
+                                        <button 
+                                            onClick={autoFillPreviousSemesters}
+                                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded shadow transition-colors whitespace-nowrap"
+                                        >
+                                            Auto-Fill Lulus
+                                        </button>
+                                    </div>
+
+                                    <div className="space-y-8">
+                                        {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => {
+                                            const coursesInSem = CURRICULUM_DB.filter(c => getCourseSemester(c) === sem);
+                                            const retakesInSem = Object.entries(retakePlan).filter(([_, target]) => target === sem).map(([code, _]) => CURRICULUM_DB.find(c => c.code === code));
+                                            const semStat = semesterStats.bySem[sem];
+                                            const isCurrent = sem === profile.currentSemester;
+                                            const totalLoad = semStat.totalSks + semStat.retakeSks;
+                                            
+                                            // Available electives that can be added to this semester
+                                            const electivesToAdd = CURRICULUM_DB.filter(c => 
+                                                c.type === 'Pilihan' && 
+                                                getCourseSemester(c) !== sem && // Not already here
+                                                !history[c.code] // Not passed
+                                            );
+
+                                            return (
+                                            <div key={sem} className={`transition-all ${sem > profile.currentSemester ? 'opacity-90' : 'opacity-100'}`}>
+                                                <div className={`flex items-center justify-between mb-3 border-b pb-2 ${darkMode ? 'border-slate-700' : 'border-slate-200'} ${isCurrent ? (darkMode ? 'border-indigo-500' : 'border-indigo-200') : ''}`}>
+                                                    <h3 className={`text-lg font-bold ${isCurrent ? (darkMode ? 'text-indigo-400' : 'text-indigo-700') : (darkMode ? 'text-slate-300' : 'text-slate-700')}`}>
+                                                        Semester {sem} 
+                                                        {isCurrent && <span className="ml-2 text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">NOW</span>}
+                                                    </h3>
+                                                    {semStat && (
+                                                        <div className={`text-sm font-medium flex gap-3 items-center ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                                                            <span className={`${totalLoad > 24 ? 'text-red-600 font-bold' : ''}`}>
+                                                                SKS: {semStat.totalSks} <span className="opacity-70 text-xs">+{semStat.retakeSks} Retake</span>
+                                                            </span>
+                                                            {semStat.totalSks > 0 && <span>NR Simulasi: <span className={semStat.nr >= 3.0 ? "text-green-600 font-bold" : "text-orange-600 font-bold"}>{semStat.nr.toFixed(2)}</span></span>}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                
+                                                <div className="grid gap-3">
+                                                    {coursesInSem.map(course => {
+                                                        const currentGrade = history[course.code] || "";
+                                                        const isMoved = movedCourses[course.code] !== undefined;
+                                                        const isFailed = currentGrade && GRADES[currentGrade] < 2.0;
+
+                                                        return (
+                                                            <div key={course.code} className={`flex flex-col md:flex-row md:items-center justify-between p-3 rounded-lg border hover:shadow-sm transition-shadow gap-3 
+                                                                ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}
+                                                                ${isCurrent ? (darkMode ? 'border-indigo-500/50' : 'border-indigo-200 shadow-sm') : ''}
+                                                                ${isMoved ? (darkMode ? 'bg-amber-900/20 ring-1 ring-amber-700' : 'bg-amber-50 ring-1 ring-amber-200') : ''}
+                                                                ${isFailed ? (darkMode ? 'bg-red-900/20 border-red-800' : 'bg-red-50 border-red-200') : ''}
+                                                            `}>
+                                                                <div className="flex-1">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className={`font-mono text-xs px-1.5 py-0.5 rounded ${darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-500'}`}>{course.code}</span>
+                                                                        <h4 className={`font-medium ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>{course.name}</h4>
+                                                                        {isMoved && <span className="text-[10px] bg-amber-200 text-amber-800 px-1 rounded">Pindahan</span>}
+                                                                        {isMandatoryCurrent(course) && <span className="text-[10px] bg-red-100 text-red-600 font-bold px-1 rounded animate-pulse">WAJIB</span>}
+                                                                    </div>
+                                                                    <div className={`text-xs mt-1 flex gap-2 items-center ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                                                                        <span className="font-semibold">{course.sks} SKS</span>
+                                                                        <div className="ml-4 flex items-center gap-3">
+                                                                            <div className="group relative">
+                                                                                <button className={`flex items-center gap-1 transition-colors ${darkMode ? 'text-slate-500 hover:text-indigo-400' : 'text-slate-400 hover:text-indigo-600'}`}>
+                                                                                    <Icon icon={Icons.ArrowRightLeft} className="w-3 h-3"/> <span className="text-[10px]">Pindah</span>
+                                                                                </button>
+                                                                                <div className={`absolute left-0 top-full mt-1 border shadow-lg rounded-md p-2 z-20 hidden group-hover:grid grid-cols-4 gap-1 w-32 ${darkMode ? 'bg-slate-800 border-slate-600' : 'bg-white border-slate-200'}`}>
+                                                                                    {[1,2,3,4,5,6,7,8].map(ts => (
+                                                                                        <button key={ts} onClick={()=>moveCourse(course.code, ts)} className={`text-[10px] p-1 rounded ${ts===sem ? (darkMode ? 'bg-indigo-900 text-indigo-200' : 'bg-indigo-100 text-indigo-700') : (darkMode ? 'text-slate-400 hover:bg-slate-700' : 'text-slate-600 hover:bg-indigo-50')}`}>{ts}</button>
+                                                                                    ))}
+                                                                                </div>
+                                                                            </div>
+                                                                            {isFailed && (
+                                                                                <div className="group relative">
+                                                                                    <button className="text-red-500 hover:text-red-700 flex items-center gap-1 transition-colors font-bold">
+                                                                                        <Icon icon={Icons.RotateCcw} className="w-3 h-3"/> <span className="text-[10px]">Ulang</span>
+                                                                                    </button>
+                                                                                    <div className={`absolute left-0 top-full mt-1 border shadow-lg rounded-md p-2 z-20 hidden group-hover:block w-40 ${darkMode ? 'bg-slate-800 border-red-900' : 'bg-white border-red-100'}`}>
+                                                                                        <div className={`text-[10px] font-bold mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Ambil Ulang di Sem:</div>
+                                                                                        <div className="grid grid-cols-4 gap-1">
+                                                                                            {[sem+1, sem+2, sem+3, sem+4].filter(s => s<=8).map(ts => (
+                                                                                                <button key={ts} onClick={()=>planRetake(course.code, ts)} className={`text-[10px] p-1 rounded border ${darkMode ? 'hover:bg-red-900/30 text-slate-300 border-slate-600' : 'hover:bg-red-50 text-slate-600 border-slate-100'}`}>{ts}</button>
+                                                                                            ))}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <select 
+                                                                        value={currentGrade}
+                                                                        onChange={(e) => {
+                                                                            const val = e.target.value;
+                                                                            setHistory(prev => {
+                                                                                const next = {...prev};
+                                                                                if (val === "") delete next[course.code];
+                                                                                else next[course.code] = val;
+                                                                                return next;
+                                                                            });
+                                                                        }}
+                                                                        className={`w-28 px-2 py-1.5 rounded-md text-sm border focus:ring-2 focus:ring-indigo-500 outline-none font-medium ${darkMode ? 'bg-slate-900' : ''}
+                                                                            ${currentGrade === '' ? (darkMode ? 'border-slate-600 text-slate-500' : 'bg-slate-50 border-slate-200 text-slate-400') : 
+                                                                            GRADES[currentGrade] >= 2.0 ? (darkMode ? 'border-green-800 text-green-400' : 'bg-green-50 border-green-200 text-green-700') :
+                                                                            (darkMode ? 'border-red-800 text-red-400' : 'bg-red-50 border-red-200 text-red-700')}
+                                                                        `}
+                                                                    >
+                                                                        <option value="">Nilai</option>
+                                                                        <option value="A">A</option>
+                                                                        <option value="AB">AB</option>
+                                                                        <option value="B">B</option>
+                                                                        <option value="BC">BC</option>
+                                                                        <option value="C">C</option>
+                                                                        <option value="D">D</option>
+                                                                        <option value="E">E</option>
+                                                                        <option value="T">T</option>
+                                                                    </select>
+                                                                </div>
+                                                            </div>
+                                                        )
+                                                    })}
+                                                    {retakesInSem.map(course => {
+                                                        const plannedGrade = retakeGrades[course.code] || "";
+                                                        return (
+                                                            <div key={`retake-${course.code}-${sem}`} className={`flex flex-col md:flex-row md:items-center justify-between p-3 rounded-lg border-2 border-dashed gap-3 relative ${darkMode ? 'border-indigo-800 bg-indigo-900/10' : 'border-indigo-300 bg-indigo-50/50'}`}>
+                                                                <div className="flex-1">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className={`font-mono text-xs px-1.5 py-0.5 rounded ${darkMode ? 'bg-indigo-900 text-indigo-300' : 'bg-indigo-100 text-indigo-600'}`}>{course.code}</span>
+                                                                        <h4 className={`font-medium ${darkMode ? 'text-slate-200' : 'text-slate-700'}`}>{course.name}</h4>
+                                                                        <span className="text-[10px] bg-indigo-500 text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1">
+                                                                            <Icon icon={Icons.RotateCcw} className="w-3 h-3"/> Retake
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="text-xs text-indigo-500 mt-1">
+                                                                        {course.sks} SKS • (Simulasi Perbaikan Nilai)
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <select 
+                                                                        value={plannedGrade}
+                                                                        onChange={(e) => {
+                                                                            const val = e.target.value;
+                                                                            setRetakeGrades(prev => {
+                                                                                const next = {...prev};
+                                                                                if (val === "") delete next[course.code];
+                                                                                else next[course.code] = val;
+                                                                                return next;
+                                                                            });
+                                                                        }}
+                                                                        className={`w-32 px-2 py-1.5 rounded-md text-sm border focus:ring-2 focus:ring-indigo-500 outline-none font-bold ${darkMode ? 'bg-slate-900 border-indigo-700 text-indigo-400' : 'bg-white border-indigo-200 text-indigo-700'}`}
+                                                                    >
+                                                                        <option value="">Target</option>
+                                                                        <option value="A">A</option>
+                                                                        <option value="AB">AB</option>
+                                                                        <option value="B">B</option>
+                                                                        <option value="BC">BC</option>
+                                                                        <option value="C">C</option>
+                                                                    </select>
+                                                                    <button onClick={()=>cancelRetake(course.code)} className={`p-1.5 rounded-full border transition-colors ${darkMode ? 'bg-slate-800 text-slate-400 border-slate-600 hover:text-red-400 hover:border-red-800' : 'bg-white text-slate-400 border-slate-200 hover:text-red-500 hover:border-red-200'}`}>
+                                                                        <Icon icon={Icons.X} className="w-4 h-4"/>
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+
+                                                    {/* ADD ELECTIVE BUTTON */}
+                                                    <div className="mt-2 relative">
+                                                        <button 
+                                                            onClick={() => setShowElectiveModal(showElectiveModal === String(sem) ? null : String(sem))}
+                                                            className={`w-full py-2 border-2 border-dashed rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors ${darkMode ? 'border-slate-700 text-slate-400 hover:border-indigo-500 hover:text-indigo-400' : 'border-slate-300 text-slate-500 hover:border-indigo-400 hover:text-indigo-600'}`}
+                                                        >
+                                                            <Icon icon={Icons.Plus} className="w-4 h-4"/>
+                                                            Ambil Matkul Pilihan
+                                                        </button>
+
+                                                        {/* ELECTIVE SELECTION POPUP */}
+                                                        {showElectiveModal === String(sem) && (
+                                                            <div className={`absolute top-full left-0 right-0 mt-2 p-3 rounded-xl border shadow-xl z-30 max-h-64 overflow-y-auto ${darkMode ? 'bg-slate-800 border-slate-600' : 'bg-white border-slate-200'}`}>
+                                                                <h4 className={`text-xs font-bold mb-2 uppercase tracking-wide ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Pilih Matkul Tersedia</h4>
+                                                                <div className="space-y-1">
+                                                                    {electivesToAdd.map(c => (
+                                                                        <button 
+                                                                            key={c.code}
+                                                                            onClick={() => moveCourse(c.code, sem)}
+                                                                            className={`w-full text-left p-2 rounded text-xs flex justify-between items-center group ${darkMode ? 'hover:bg-indigo-900/30 text-slate-300' : 'hover:bg-indigo-50 text-slate-700'}`}
+                                                                        >
+                                                                            <span>
+                                                                                <span className="font-mono opacity-70 mr-2">{c.code}</span>
+                                                                                {c.name}
+                                                                            </span>
+                                                                            <span className={`px-1.5 py-0.5 rounded text-[10px] ${darkMode ? 'bg-slate-700 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>{c.sks} SKS</span>
+                                                                        </button>
+                                                                    ))}
+                                                                    {electivesToAdd.length === 0 && (
+                                                                        <div className="text-center text-xs opacity-50 py-2">Tidak ada matkul pilihan tersisa.</div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* PLANNER */}
+                            {activeTab === 'planner' && (
+                                <div className="space-y-6">
+                                    <div className="bg-slate-900 text-white p-6 rounded-xl shadow-lg relative overflow-hidden">
+                                        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600 rounded-full mix-blend-multiply filter blur-3xl opacity-20 -translate-y-10 translate-x-10"></div>
+                                        <div className="relative z-10">
+                                                <div className="flex items-center gap-3 mb-2">
+                                                    <Icon icon={Icons.Target} className="w-6 h-6 text-indigo-400" />
+                                                    <h2 className="text-xl font-bold">Interactive Strategist</h2>
+                                                </div>
+                                                <p className="text-slate-300 text-sm max-w-2xl">
+                                                    Bangun rencana studi custom-mu. Gunakan mode "Katalog Lengkap" untuk memilih matkul semester berapapun.
+                                                </p>
+                                        </div>
+                                    </div>
+
+                                    {/* FEEDBACK PANEL */}
+                                    {(planFeedback.warnings.length > 0 || planFeedback.infos.length > 0) && (
+                                        <Card darkMode={darkMode} className="p-4 animate-in slide-in-from-top duration-300">
+                                            <h3 className={`font-bold mb-2 flex items-center gap-2 ${darkMode ? 'text-slate-200' : 'text-slate-700'}`}>
+                                                <Icon icon={Icons.Bot} className="w-5 h-5 text-indigo-600"/> Coach AI Notes:
+                                            </h3>
+                                            <div className="space-y-2">
+                                                {planFeedback.warnings.map((w, i) => (
+                                                    <div key={i} className={`flex items-start gap-2 text-sm p-2 rounded ${darkMode ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-600'}`}>
+                                                        <Icon icon={Icons.AlertTriangle} className="w-4 h-4 mt-0.5 flex-shrink-0"/>
+                                                        {w}
+                                                    </div>
+                                                ))}
+                                                {planFeedback.infos.map((info, i) => (
+                                                    <div key={i} className={`flex items-start gap-2 text-sm p-2 rounded ${darkMode ? 'bg-blue-900/30 text-blue-300' : 'bg-blue-50 text-blue-600'}`}>
+                                                        <Icon icon={Icons.Info} className="w-4 h-4 mt-0.5 flex-shrink-0"/>
+                                                        {info}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </Card>
+                                    )}
+
+                                    <div className="grid md:grid-cols-2 gap-6 h-[600px]">
+                                        {/* LEFT: COURSE SELECTOR */}
+                                        <div className="flex flex-col gap-4 overflow-hidden h-full">
+                                            <div className="flex items-center justify-between">
+                                                <h3 className={`font-bold flex items-center gap-2 ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                                                    <Icon icon={Icons.Sparkles} className="w-5 h-5 text-emerald-600"/>
+                                                    Pilih Mata Kuliah
+                                                </h3>
+                                                {/* MODE TOGGLE */}
+                                                <div className="flex bg-slate-100 rounded-lg p-1">
+                                                    <button 
+                                                        onClick={() => setPlannerMode('recommendation')}
+                                                        className={`text-xs px-3 py-1.5 rounded-md transition-all ${plannerMode === 'recommendation' ? 'bg-white shadow text-indigo-700 font-bold' : 'text-slate-500 hover:text-slate-700'}`}
+                                                    >
+                                                        Rekomendasi AI
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => setPlannerMode('catalog')}
+                                                        className={`text-xs px-3 py-1.5 rounded-md transition-all ${plannerMode === 'catalog' ? 'bg-white shadow text-indigo-700 font-bold' : 'text-slate-500 hover:text-slate-700'}`}
+                                                    >
+                                                        Katalog Lengkap
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex-1 overflow-y-auto pr-2 space-y-3">
+                                                {(plannerMode === 'recommendation' ? recommendedCourses : availableCourses).filter(c => !plannerSelection.includes(c.code)).map((course) => {
+                                                    const unlocks = getUnlockList(course.code);
+                                                    const specs = getSpecIntersections(course.code);
+                                                    const isWajib = isMandatoryCurrent(course);
+                                                    
+                                                    return (
+                                                        <div key={course.code} className={`p-3 rounded-lg border shadow-sm relative group transition-all hover:border-indigo-400 
+                                                                ${darkMode ? 'bg-slate-800' : 'bg-white'}
+                                                                ${isWajib 
+                                                                    ? (darkMode ? 'border-red-900/50 bg-red-900/10' : 'border-red-200 bg-red-50/30') 
+                                                                    : (darkMode ? 'border-slate-700' : 'border-slate-200')}
+                                                        `}>
+                                                            <div className="flex justify-between items-start">
+                                                                    <div className="flex-1">
+                                                                        <div className="flex items-center gap-2">
+                                                                            {isWajib && <span className="text-[10px] bg-red-600 text-white px-1.5 rounded font-bold">WAJIB</span>}
+                                                                            <h4 className={`font-bold text-sm ${darkMode ? 'text-slate-200' : 'text-slate-700'}`}>{course.name}</h4>
+                                                                        </div>
+                                                                        <div className={`text-xs font-mono mt-1 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                                                                            {course.code} • {course.sks} SKS • Sem {course.semester}
+                                                                        </div>
+                                                                        
+                                                                        {/* DETAIL UNLOCK & SPEC */}
+                                                                        <div className="mt-2 text-[10px] space-y-1 text-slate-500">
+                                                                            {specs.length > 0 && (
+                                                                                <div className="flex items-start gap-1">
+                                                                                    <Icon icon={Icons.Target} className="w-3 h-3 text-indigo-500 mt-0.5"/>
+                                                                                    <span className={darkMode ? 'text-slate-400' : ''}>Irisan: {specs.join(', ')}</span>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                    <button 
+                                                                        onClick={() => toggleCourseInPlan(course)}
+                                                                        className={`p-1.5 rounded-lg transition-colors ${darkMode ? 'bg-indigo-900 text-indigo-300 hover:bg-indigo-700 hover:text-white' : 'bg-indigo-100 text-indigo-600 hover:bg-indigo-600 hover:text-white'}`}
+                                                                    >
+                                                                        <Icon icon={Icons.Plus} className="w-4 h-4"/>
+                                                                    </button>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                                
+                                                {plannerMode === 'catalog' && availableCourses.length === 0 && (
+                                                    <div className="text-center p-4 text-slate-400 text-sm">
+                                                        Semua matkul yang tersedia sudah dipilih atau lulus!
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* RIGHT: USER PLAN */}
+                                        <div className="flex flex-col gap-4 overflow-hidden h-full">
+                                            <div className="flex justify-between items-center">
+                                                <h3 className={`font-bold flex items-center gap-2 ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                                                    <Icon icon={Icons.CheckCircle} className="w-5 h-5 text-indigo-600"/>
+                                                    Draft Rencanamu
+                                                </h3>
+                                                <span className="text-xs font-bold bg-indigo-100 text-indigo-700 px-2 py-1 rounded">
+                                                    Total: {plannerSelection.reduce((acc, code) => acc + (CURRICULUM_DB.find(c=>c.code===code)?.sks || 0), 0)} SKS
+                                                </span>
+                                            </div>
+
+                                            <div className={`flex-1 rounded-xl border p-3 overflow-y-auto space-y-3 ${darkMode ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                                                {plannerSelection.length === 0 && (
+                                                    <div className="h-full flex flex-col items-center justify-center text-slate-400 text-center p-6">
+                                                        <Icon icon={Icons.Target} className="w-12 h-12 mb-2 opacity-20"/>
+                                                        <p className="text-sm">Belum ada matkul dipilih.</p>
+                                                        <p className="text-xs">Klik (+) pada rekomendasi di kiri.</p>
+                                                    </div>
+                                                )}
+                                                {plannerSelection.map(code => {
+                                                    const course = CURRICULUM_DB.find(c => c.code === code);
+                                                    return (
+                                                        <div key={code} className={`p-3 rounded-lg border shadow-sm flex justify-between items-center ${darkMode ? 'bg-slate-800 border-indigo-900' : 'bg-white border-indigo-200'}`}>
+                                                            <div>
+                                                                <div className={`font-bold text-sm ${darkMode ? 'text-slate-200' : 'text-slate-700'}`}>{course.name}</div>
+                                                                <div className="text-xs text-slate-500">{course.code} • {course.sks} SKS</div>
+                                                            </div>
+                                                            <button 
+                                                                    onClick={() => toggleCourseInPlan(course)}
+                                                                    className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
+                                                                >
+                                                                    <Icon icon={Icons.Minus} className="w-4 h-4"/>
+                                                                </button>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* LIBRARY */}
+                            {activeTab === 'library' && (
+                                <div className="space-y-8">
+                                    <div className="bg-slate-900 text-white p-6 rounded-xl">
+                                        <h2 className="text-xl font-bold flex items-center gap-2">
+                                            <Icon icon={Icons.Database} className="w-6 h-6 text-indigo-400"/>
+                                            Direktori Kurikulum
+                                        </h2>
+                                        <p className="text-slate-400 text-sm">Daftar lengkap mata kuliah per semester dan daftar spesialisasi.</p>
+                                        
+                                        {/* LEGEND */}
+                                        <div className="flex gap-4 mt-4 text-xs">
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-3 h-3 bg-indigo-500 rounded-sm"></span>
+                                                <span className="text-slate-300">Matkul Spesialisasi</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-3 h-3 bg-slate-500 rounded-sm opacity-50"></span>
+                                                <span className="text-slate-300">Matkul Umum</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* SECTION 1: KURIKULUM PER SEMESTER */}
+                                    <div className="space-y-6">
+                                        <h3 className={`text-lg font-bold border-b pb-2 ${darkMode ? 'text-slate-200 border-slate-700' : 'text-slate-800 border-slate-200'}`}>
+                                            Kurikulum Akademik (Per Semester)
+                                        </h3>
+                                        <div className="grid md:grid-cols-2 gap-6">
+                                            {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => {
+                                                const courses = CURRICULUM_DB.filter(c => c.semester === sem);
+                                                if (courses.length === 0) return null;
+
+                                                return (
+                                                    <Card key={sem} darkMode={darkMode} className="p-0 overflow-hidden h-fit">
+                                                        <div className={`p-3 font-bold text-sm flex justify-between items-center ${darkMode ? 'bg-slate-800 border-b border-slate-700 text-slate-200' : 'bg-slate-50 border-b border-slate-200 text-slate-700'}`}>
+                                                            <span>Semester {sem}</span>
+                                                            <span className="text-xs font-normal text-slate-500">{courses.reduce((a,b)=>a+b.sks, 0)} SKS</span>
+                                                        </div>
+                                                        <div className="overflow-x-auto">
+                                                            <table className="w-full text-xs text-left">
+                                                                <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
+                                                                    {courses.map(c => {
+                                                                        const isSpec = isSpecializationCourse(c.code);
+                                                                        return (
+                                                                            <tr key={c.code} className={`${darkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-50'}`}>
+                                                                                <td className={`p-2 font-mono ${isSpec ? 'text-indigo-500 font-bold' : (darkMode ? 'text-slate-400' : 'text-slate-500')}`}>{c.code}</td>
+                                                                                <td className={`p-2 ${isSpec ? (darkMode ? 'text-indigo-300' : 'text-indigo-700 font-medium') : (darkMode ? 'text-slate-300' : 'text-slate-700')}`}>
+                                                                                    {c.name}
+                                                                                </td>
+                                                                                <td className="p-2 text-right text-slate-500">{c.sks}</td>
+                                                                            </tr>
+                                                                        );
+                                                                    })}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </Card>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* SECTION 2: SPESIALISASI */}
+                                    <div className="space-y-6">
+                                        <h3 className={`text-lg font-bold border-b pb-2 ${darkMode ? 'text-slate-200 border-slate-700' : 'text-slate-800 border-slate-200'}`}>
+                                            Daftar Spesialisasi
+                                        </h3>
+                                        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                            {SPECIALIZATIONS.map(s => (
+                                                <Card key={s.id} darkMode={darkMode} className={`p-4 transition-all hover:shadow-md ${darkMode ? 'hover:border-indigo-500' : 'hover:border-indigo-300'}`}>
+                                                    <div className="font-bold text-indigo-500 mb-1">{s.name}</div>
+                                                    <div className={`text-xs mb-3 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{s.desc}</div>
+                                                    <div className="space-y-1">
+                                                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Wajib Ambil:</div>
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {s.required.map(rc => {
+                                                                const cName = CURRICULUM_DB.find(x => x.code === rc)?.name || rc;
+                                                                return (
+                                                                    <span key={rc} className={`text-[10px] px-2 py-1 rounded border w-full truncate ${darkMode ? 'bg-slate-700 border-slate-600 text-indigo-300' : 'bg-indigo-50 border-indigo-100 text-indigo-700'}`}>
+                                                                        {rc} - {cName}
+                                                                    </span>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                </Card>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* ASSISTANT */}
+                            {activeTab === 'assistant' && (
+                                <div className={`h-[600px] flex flex-col rounded-xl border shadow-sm overflow-hidden ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                                    <div className="bg-indigo-600 p-4 text-white flex items-center gap-3">
+                                        <div className="bg-white/20 p-2 rounded-full">
+                                            <Icon icon={Icons.Bot} className="w-6 h-6"/>
+                                        </div>
+                                        <div>
+                                            <h3 className="font-bold">OceanAI Assistant (LLM V2)</h3>
+                                            <div className="text-xs text-indigo-200 flex items-center gap-1">
+                                                <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                                                Online & Learning
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${darkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
+                                        {messages.map((m, i) => (
+                                            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                                <div className={`max-w-[85%] p-3 rounded-xl text-sm whitespace-pre-line leading-relaxed shadow-sm ${
+                                                    m.role === 'user' 
+                                                    ? 'bg-indigo-600 text-white rounded-tr-none' 
+                                                    : (darkMode ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-slate-200 text-slate-700') + ' border rounded-tl-none'
+                                                }`}>
+                                                    {m.text}
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {isTyping && (
+                                            <div className="flex justify-start">
+                                                <div className={`border p-3 rounded-xl rounded-tl-none shadow-sm flex gap-1 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                                                    <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></span>
+                                                    <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-75"></span>
+                                                    <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-150"></span>
+                                                </div>
+                                            </div>
+                                        )}
+                                        <div ref={chatEndRef} />
+                                    </div>
+
+                                    <div className={`p-4 border-t flex gap-2 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                                        <input 
+                                            type="text" 
+                                            value={chatInput}
+                                            onChange={(e) => setChatInput(e.target.value)}
+                                            onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                                            placeholder="Ketik pertanyaanmu..."
+                                            className={`flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${darkMode ? 'bg-slate-900 border-slate-600 text-white' : 'bg-white border-slate-300 text-slate-900'}`}
+                                        />
+                                        <button 
+                                            onClick={handleSendMessage}
+                                            disabled={isTyping}
+                                            className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                                        >
+                                            <Icon icon={Icons.Send} className="w-5 h-5"/>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </main>
+
+                    <footer className={`mt-12 py-8 border-t text-center ${darkMode ? 'border-slate-800 text-slate-500' : 'border-slate-200 text-slate-400'}`}>
+                        <div className="max-w-md mx-auto px-4">
+                            <p className="text-sm mb-2 font-medium">OceanPlan - Student Academic Planner</p>
+                            <p className="text-xs mb-4">
+                                Ada kesalahan kurikulum atau punya saran fitur menarik? 
+                                Kami sangat menghargai masukanmu untuk pengembangan aplikasi ini.
+                            </p>
+                            <a 
+                                href="mailto:aswalaritonang@gmail.com?subject=OceanPlan%20Feedback" 
+                                className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm transition-colors ${darkMode ? 'bg-slate-800 text-indigo-400 hover:bg-slate-700' : 'bg-white border text-indigo-600 hover:bg-slate-50'}`}
+                            >
+                                <Icon icon={Icons.Mail} className="w-4 h-4"/>
+                                Hubungi Admin (Aswala)
+                            </a>
+                        </div>
+                    </footer>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
