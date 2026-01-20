@@ -55,6 +55,7 @@
                 });
                 if (!response.ok) throw new Error("Gagal akses backend");
                 const result = await response.json();
+                // Sesuaikan dengan struktur JSON dari Gemini API
                 return result.candidates?.[0]?.content?.parts?.[0]?.text || "Maaf, asisten sedang sibuk.";
             } catch (error) {
                 return "Koneksi asisten AI bermasalah. Pastikan API di repo private sudah aktif.";
