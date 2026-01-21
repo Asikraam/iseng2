@@ -1,10 +1,12 @@
 // js/data.js
-const GRADES = { 'A': 4.0, 'AB': 3.5, 'B': 3.0, 'BC': 2.5, 'C': 2.0, 'D': 1.0, 'E': 0.0, 'T': 0.0 };
-const TARGET_SKS_LULUS = 144;
-const TARGET_SKS_WAJIB = 100;
-const TARGET_SKS_PILIHAN = 44;
 
-const SPECIALIZATIONS = [
+// Pasang variabel ke objek window agar bisa diakses secara global oleh app.js
+window.GRADES = { 'A': 4.0, 'AB': 3.5, 'B': 3.0, 'BC': 2.5, 'C': 2.0, 'D': 1.0, 'E': 0.0, 'T': 0.0 };
+window.TARGET_SKS_LULUS = 144;
+window.TARGET_SKS_WAJIB = 100;
+window.TARGET_SKS_PILIHAN = 44;
+
+window.SPECIALIZATIONS = [
     { id: 'offshore', name: 'Struktur Bangunan Lepas Pantai', required: ['KL4101', 'KL4102'], desc: 'Desain anjungan minyak & gas.' },
     { id: 'coastal', name: 'Rekayasa & Perlindungan Pantai', required: ['KL4201', 'KL3202'], desc: 'Penanganan abrasi & reklamasi.' },
     { id: 'port', name: 'Pelabuhan & Transportasi Laut', required: ['KL4105', 'KL4205'], desc: 'Logistik maritim.' },
@@ -15,7 +17,7 @@ const SPECIALIZATIONS = [
     { id: 'acoustics', name: 'Akustik Bawah Air', required: ['KL3104'], desc: 'Sonar & instrumentasi.' },
 ];
 
-const CURRICULUM_DB = [
+window.CURRICULUM_DB = [
     { code: 'MA1101', name: 'Matematika IA', sks: 4, semester: 1, type: 'Wajib', prereq: [] },
     { code: 'FI1101', name: 'Fisika Dasar IA', sks: 4, semester: 1, type: 'Wajib', prereq: [] },
     { code: 'MA1201', name: 'Matematika IIA', sks: 4, semester: 2, type: 'Wajib', prereq: ['MA1101'] },
@@ -38,7 +40,7 @@ const CURRICULUM_DB = [
     { code: 'KL4205', name: 'Operasional Pelabuhan', sks: 3, semester: 8, type: 'Pilihan', prereq: ['KL4105'] },
 ];
 
-const Icons = {
+window.Icons = {
     BookOpen: lucide.icons.BookOpen, CheckCircle: lucide.icons.CheckCircle, AlertCircle: lucide.icons.AlertCircle,
     TrendingUp: lucide.icons.TrendingUp, Award: lucide.icons.Award, Brain: lucide.icons.Brain,
     Save: lucide.icons.Save, BarChart3: lucide.icons.BarChart3, ArrowRightLeft: lucide.icons.ArrowRightLeft,
