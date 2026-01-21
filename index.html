@@ -3,475 +3,420 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OceanPlan - Evaluasi Perkuliahan</title>
+    <title>OceanPlan - Academic Suite</title>
+    <!-- Google Fonts: Poppins -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Marked.js (Markdown Parser) -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
     <style>
+        body { font-family: 'Poppins', sans-serif; transition: background-color 0.3s ease; }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-        @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fade-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         .animate-in { animation: fade-in 0.3s ease-out forwards; }
         .glass { backdrop-filter: blur(12px); }
-        .dark .card-bg { background-color: #1e293b; border-color: #334155; }
-        .dark .bg-main { background-color: #0f172a; }
+        input[type="range"] { accent-color: #6366f1; }
+        
+        /* Tema Warna Kustom */
+        .dark .bg-app { background-color: #020617; } 
+        .dark .bg-card { background-color: #0f172a; border-color: #1e293b; }
+        .dark .text-main { color: #f8fafc; }
+        .dark .text-sub { color: #94a3b8; }
+
+        /* --- STYLING JAWABAN AI --- */
+        .markdown-content { font-size: 0.85rem; line-height: 1.6; }
+        .markdown-content p { margin-bottom: 0.75rem; }
+        .markdown-content p:last-child { margin-bottom: 0; }
+        .markdown-content ul { list-style-type: disc; padding-left: 1.25rem; margin-bottom: 0.75rem; }
+        .markdown-content ol { list-style-type: decimal; padding-left: 1.25rem; margin-bottom: 0.75rem; }
+        .markdown-content li { margin-bottom: 0.25rem; }
+        .markdown-content strong { font-weight: 800; color: #4f46e5; }
+        .dark .markdown-content strong { color: #818cf8; }
+        .markdown-content h3 { font-weight: 700; margin-top: 0.75rem; color: #6366f1; font-size: 0.95rem; }
     </style>
 </head>
-<body class="bg-slate-50 transition-colors duration-300">
+<body class="bg-slate-50 dark:bg-app text-slate-900 dark:text-slate-100">
     <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // --- KONFIGURASI ENDPOINT (Pastikan sesuai dengan Vercel kamu) ---
-        const BACKEND_URL = "https://rahasia-iseng2.vercel.app/api/chat"; 
-
-        // --- FIX LOGIC AI (SINKRON DENGAN BACKEND v1beta) ---
-        const askGemini = async (userQuery, systemPrompt, chatHistory = []) => {
-            // 1. Map history ke format Google
-            const contents = chatHistory.map(msg => ({
-                role: msg.role === 'user' ? 'user' : 'model',
-                parts: [{ text: msg.text }]
-            }));
-            
-            // 2. Tambahkan pesan user terbaru
-            contents.push({ role: 'user', parts: [{ text: userQuery }] });
-
-            // 3. Susun payload untuk backend v1beta
-            const payload = { 
-                contents: contents, 
-                systemInstruction: { 
-                    parts: [{ text: systemPrompt }] 
-                } 
-            };
-
-            try {
-                const response = await fetch(BACKEND_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                if (!response.ok) throw new Error("Gagal akses backend");
-                
-                const result = await response.json();
-                
-                if (result.error) {
-                    console.error("Gemini Error:", result.error);
-                    return `Error: ${result.error.message}`;
-                }
-
-                return result.candidates?.[0]?.content?.parts?.[0]?.text || "Maaf, asisten sedang tidak merespon.";
-            } catch (error) {
-                console.error("Fetch Error:", error);
-                return "Koneksi asisten AI bermasalah. Pastikan API di repo private sudah aktif.";
-            }
-        };
-
-        const Icon = ({ icon, size = 20, className = "" }) => {
-            if (!icon) return null;
-            return (
-                <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-                  {icon.map(([tag, attrs], index) => React.createElement(tag, { ...attrs, key: index }))}
-                </svg>
-            );
-        };
-
-        const Icons = {
-            BookOpen: lucide.icons.BookOpen, CheckCircle: lucide.icons.CheckCircle, AlertCircle: lucide.icons.AlertCircle,
-            TrendingUp: lucide.icons.TrendingUp, Award: lucide.icons.Award, Brain: lucide.icons.Brain,
-            Save: lucide.icons.Save, BarChart3: lucide.icons.BarChart3, ArrowRightLeft: lucide.icons.ArrowRightLeft,
-            Info: lucide.icons.Info, X: lucide.icons.X, Database: lucide.icons.Database,
-            MessageSquare: lucide.icons.MessageSquare, Send: lucide.icons.Send, RotateCcw: lucide.icons.RotateCcw,
-            Target: lucide.icons.Target, Sparkles: lucide.icons.Sparkles, AlertTriangle: lucide.icons.AlertTriangle,
-            Bot: lucide.icons.Bot, Plus: lucide.icons.Plus, Minus: lucide.icons.Minus,
-            Moon: lucide.icons.Moon, Sun: lucide.icons.Sun, Mail: lucide.icons.Mail, 
-            PieChart: lucide.icons.PieChart, Zap: lucide.icons.Zap, Calendar: lucide.icons.Calendar,
-            Clock: lucide.icons.Clock, GraduationCap: lucide.icons.GraduationCap, ChevronRight: lucide.icons.ChevronRight
-        };
-
+        // --- CONSTANTS ---
         const GRADES = { 'A': 4.0, 'AB': 3.5, 'B': 3.0, 'BC': 2.5, 'C': 2.0, 'D': 1.0, 'E': 0.0, 'T': 0.0 };
         const TARGET_SKS_LULUS = 144;
         const TARGET_SKS_WAJIB = 100;
         const TARGET_SKS_PILIHAN = 44;
+        const BACKEND_URL = "/api/chat"; 
 
         const SPECIALIZATIONS = [
-            { id: 'offshore', name: 'Struktur Bangunan Lepas Pantai', required: ['KL4101', 'KL4102'], desc: 'Desain anjungan minyak & gas.' },
-            { id: 'coastal', name: 'Rekayasa & Perlindungan Pantai', required: ['KL4201', 'KL3202'], desc: 'Penanganan abrasi & reklamasi.' },
-            { id: 'port', name: 'Pelabuhan & Transportasi Laut', required: ['KL4105', 'KL4205'], desc: 'Logistik maritim.' },
-            { id: 'ocean_modelling', name: 'Pemodelan & Hidrodinamika', required: ['KL4202', 'KL2205'], desc: 'Simulasi arus & tsunami.' },
-            { id: 'geotech', name: 'Geoteknik Kelautan', required: ['KL3103', 'KL3204'], desc: 'Pondasi dasar laut.' },
-            { id: 'environment', name: 'Lingkungan Laut', required: ['KL4110'], desc: 'AMDAL & konservasi.' },
-            { id: 'energy', name: 'Energi Laut Terbarukan', required: ['KL4108', 'KL4208'], desc: 'Energi terbarukan arus/gelombang.' },
-            { id: 'acoustics', name: 'Akustik Bawah Air', required: ['KL3104'], desc: 'Sonar & instrumentasi.' },
+            { id: 'offshore', name: 'Lepas Pantai', required: ['KL4101', 'KL4102'], desc: 'Desain anjungan minyak & gas.' },
+            { id: 'coastal', name: 'Rekayasa Pantai', required: ['KL4201', 'KL3202'], desc: 'Penanganan abrasi & reklamasi.' },
+            { id: 'port', name: 'Pelabuhan', required: ['KL4105', 'KL4205'], desc: 'Logistik Maritim & Dermaga.' },
+            { id: 'ocean_modelling', name: 'Pemodelan', required: ['KL4202', 'KL2205'], desc: 'Simulasi arus & tsunami.' },
+            { id: 'geotech', name: 'Geoteknik', required: ['KL3103', 'KL3204'], desc: 'Pondasi Dasar Laut.' },
+            { id: 'environment', name: 'Lingkungan', required: ['KL4110'], desc: 'AMDAL & Konservasi.' },
+            { id: 'energy', name: 'Energia Laut', required: ['KL4108', 'KL4208'], desc: 'Energi terbarukan arus laut.' },
+            { id: 'acoustics', name: 'Akustik', required: ['KL3104'], desc: 'Sonar & bawah air.' },
         ];
 
         const CURRICULUM_DB = [
             { code: 'MA1101', name: 'Matematika IA', sks: 4, semester: 1, type: 'Wajib', prereq: [] },
             { code: 'FI1101', name: 'Fisika Dasar IA', sks: 4, semester: 1, type: 'Wajib', prereq: [] },
+            { code: 'KI1101', name: 'Kimia Dasar IA', sks: 3, semester: 1, type: 'Wajib', prereq: [] },
+            { code: 'KU1102', name: 'Pengenalan Komputasi', sks: 3, semester: 1, type: 'Wajib', prereq: [] },
+            { code: 'KU1011', name: 'Tata Tulis Karya Ilmiah', sks: 2, semester: 1, type: 'Wajib', prereq: [] },
+            { code: 'KU1001', name: 'Olahraga', sks: 2, semester: 1, type: 'Wajib', prereq: [] },
             { code: 'MA1201', name: 'Matematika IIA', sks: 4, semester: 2, type: 'Wajib', prereq: ['MA1101'] },
+            { code: 'FI1201', name: 'Fisika Dasar IIA', sks: 4, semester: 2, type: 'Wajib', prereq: ['FI1101'] },
+            { code: 'KI1201', name: 'Kimia Dasar IIA', sks: 3, semester: 2, type: 'Wajib', prereq: ['KI1101'] },
+            { code: 'KU1202', name: 'Pengantar Rekayasa & Desain', sks: 2, semester: 2, type: 'Wajib', prereq: [] },
+            { code: 'KU1024', name: 'Bahasa Inggris', sks: 2, semester: 2, type: 'Wajib', prereq: [] },
+            { code: 'KU1101', name: 'Pendidikan Agama', sks: 2, semester: 2, type: 'Wajib', prereq: [] },
+            { code: 'KL2101', name: 'Matematika Teknik I', sks: 3, semester: 3, type: 'Wajib', prereq: ['MA1201'] },
             { code: 'KL2102', name: 'Mekanika Fluida', sks: 4, semester: 3, type: 'Wajib', prereq: [] },
+            { code: 'KL2103', name: 'Statika Struktur', sks: 3, semester: 3, type: 'Wajib', prereq: [] },
+            { code: 'KL2201', name: 'Matematika Teknik II', sks: 3, semester: 4, type: 'Wajib', prereq: ['KL2101'] },
             { code: 'KL2202', name: 'Hidrodinamika', sks: 3, semester: 4, type: 'Wajib', prereq: ['KL2102'] },
-            { code: 'KL3102', name: 'Gelombang Laut', sks: 3, semester: 5, type: 'Wajib', prereq: ['KL2202'] },
-            { code: 'KL3202', name: 'Bangunan Pantai', sks: 3, semester: 6, type: 'Wajib', prereq: ['KL3102'] },
-            { code: 'KL4101', name: 'Dinamika Struktur Lepas Pantai', sks: 3, semester: 7, type: 'Pilihan', prereq: [] },
-            { code: 'KL4102', name: 'Desain Struktur Lepas Pantai II', sks: 3, semester: 8, type: 'Pilihan', prereq: ['KL4101'] },
-            { code: 'KL4201', name: 'Manajemen Pesisir', sks: 3, semester: 7, type: 'Pilihan', prereq: [] },
-            { code: 'KL4202', name: 'Model Numerik Pantai', sks: 3, semester: 8, type: 'Pilihan', prereq: ['KL3202'] },
-            { code: 'KL3103', name: 'Mekanika Tanah Laut', sks: 3, semester: 5, type: 'Wajib', prereq: [] },
-            { code: 'KL3204', name: 'Pondasi Laut', sks: 2, semester: 6, type: 'Wajib', prereq: ['KL3103'] },
-            { code: 'KL4110', name: 'Lingkungan Laut & Pengerukan', sks: 3, semester: 7, type: 'Pilihan', prereq: [] },
-            { code: 'KL2205', name: 'Metode Numerik Kelautan', sks: 2, semester: 4, type: 'Wajib', prereq: [] },
-            { code: 'KL3104', name: 'Akustik Bawah Air', sks: 3, semester: 5, type: 'Wajib', prereq: [] },
-            { code: 'KL4108', name: 'Energi Arus', sks: 3, semester: 7, type: 'Pilihan', prereq: [] },
-            { code: 'KL4208', name: 'Energi Gelombang', sks: 3, semester: 8, type: 'Pilihan', prereq: [] },
-            { code: 'KL4105', name: 'Perencanaan Pelabuhan', sks: 3, semester: 7, type: 'Pilihan', prereq: [] },
-            { code: 'KL4205', name: 'Operasional Pelabuhan', sks: 3, semester: 8, type: 'Pilihan', prereq: ['KL4105'] },
+            { code: 'KL3101', name: 'Analisis Struktur Matriks', sks: 3, semester: 5, type: 'Wajib', prereq: [] },
+            { code: 'KL4101', name: 'Dinamika Lepas Pantai', sks: 3, semester: 7, type: 'Pilihan', prereq: [] },
+            { code: 'KL4099', name: 'Tugas Akhir', sks: 4, semester: 8, type: 'Wajib', prereq: [] },
         ];
 
-        // --- UI COMPONENTS ---
-        const ProgressBar = ({ label, current, max, colorClass, darkMode }) => (
-            <div className="mb-4">
-                <div className="flex justify-between text-[10px] font-black mb-1.5 uppercase tracking-widest opacity-80">
-                    <span className={darkMode ? 'text-slate-400' : 'text-slate-500'}>{label}</span>
-                    <span className={darkMode ? 'text-slate-200' : 'text-slate-800'}>{current} / {max} SKS</span>
-                </div>
-                <div className={`w-full h-3 rounded-full ${darkMode ? 'bg-slate-800' : 'bg-slate-200'}`}>
-                    <div 
-                        className={`h-full rounded-full transition-all duration-1000 ease-in-out ${colorClass}`} 
-                        style={{ width: `${Math.min((current/max)*100, 100)}%` }}
-                    ></div>
-                </div>
-            </div>
-        );
+        // --- HELPERS (Global Scope) ---
+        function getSpecIntersections(code) {
+            return SPECIALIZATIONS.filter(s => s.required.includes(code)).map(s => s.name);
+        }
+        function isSpecializationCourse(code) {
+            return SPECIALIZATIONS.some(s => s.required.includes(code));
+        }
+        function getSpecName(code) {
+            const found = SPECIALIZATIONS.filter(s => s.required.includes(code));
+            return found.length > 0 ? found.map(s => s.name).join(', ') : null;
+        }
 
-        const SimpleLineChart = ({ data, darkMode }) => {
-            if (!data || data.length === 0) return null;
+        // --- COMPONENTS ---
+        function Icon({ icon, size = 18, className = "" }) {
+            if (!icon) return null;
+            return (
+                <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                  {icon.map(([tag, attrs], index) => React.createElement(tag, { ...attrs, key: index }))}
+                </svg>
+            );
+        }
+
+        const Icons = {
+            BookOpen: lucide.icons.BookOpen, BarChart3: lucide.icons.BarChart3, Save: lucide.icons.Save,
+            Target: lucide.icons.Target, Database: lucide.icons.Database, MessageSquare: lucide.icons.MessageSquare,
+            Sun: lucide.icons.Sun, Moon: lucide.icons.Moon, Info: lucide.icons.Info, CheckCircle: lucide.icons.CheckCircle,
+            Clock: lucide.icons.Clock, TrendingUp: lucide.icons.TrendingUp, PieChart: lucide.icons.PieChart,
+            Award: lucide.icons.Award, Zap: lucide.icons.Zap, Plus: lucide.icons.Plus, X: lucide.icons.X,
+            Move: lucide.icons.Move, Send: lucide.icons.Send
+        };
+
+        function Card({ children, className = "", darkMode }) {
+            return (
+                <div className={`rounded-2xl border transition-all duration-300 ${darkMode ? 'bg-slate-900 border-slate-800 text-slate-100 shadow-xl' : 'bg-white border-slate-200 text-slate-900 shadow-sm'} ${className}`}>
+                    {children}
+                </div>
+            );
+        }
+
+        function ProgressBar({ label, current, max, colorClass, darkMode }) {
+            return (
+                <div className="mb-4">
+                    <div className="flex justify-between text-[9px] font-bold mb-1 uppercase tracking-widest leading-none">
+                        <span className={darkMode ? 'text-slate-400' : 'text-slate-500'}>{label}</span>
+                        <span className="font-bold">{current}/{max}</span>
+                    </div>
+                    <div className={`w-full h-1.5 rounded-full ${darkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
+                        <div className={`h-full rounded-full transition-all duration-1000 ${colorClass}`} style={{ width: `${Math.min((current/max)*100, 100)}%` }}></div>
+                    </div>
+                </div>
+            );
+        }
+
+        function SimpleLineChart({ data, darkMode }) {
+            if (!data || data.length === 0) return <div className="h-32 flex items-center justify-center text-[10px] opacity-30 italic font-bold tracking-widest">NO DATA</div>;
             const height = 100; const width = 300; const maxVal = 4.0;
             const points = data.map((d, i) => `${(i/(data.length-1 || 1))*width},${height - (d.nr/maxVal)*height}`).join(' ');
-            const gridColor = darkMode ? "#334155" : "#e2e8f0"; 
+            const gridColor = darkMode ? "#1e293b" : "#f1f5f9"; 
             const lineColor = "#6366f1"; 
             return (
-                <div className="w-full h-44 relative px-4">
+                <div className="w-full h-32 px-4 py-2">
                     <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
-                        {[0, 0.25, 0.5, 0.75, 1].map(v => (
-                            <line key={v} x1="0" y1={height * v} x2={width} y2={height * v} stroke={gridColor} strokeWidth="1" strokeDasharray="4" />
-                        ))}
-                        <polyline points={points} fill="none" stroke={lineColor} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+                        {[0, 0.5, 1].map(v => <line key={v} x1="0" y1={height * v} x2={width} y2={height * v} stroke={gridColor} strokeWidth="1" strokeDasharray="4" />)}
+                        <polyline points={points} fill="none" stroke={lineColor} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
                         {data.map((d, i) => {
                             const x = (i/(data.length-1 || 1))*width;
                             const y = height - (d.nr/maxVal)*height;
                             return (
                                 <g key={i}>
-                                    <circle cx={x} cy={y} r="6" fill={darkMode ? "#0f172a" : "white"} stroke={lineColor} strokeWidth="3" />
-                                    <text x={x} y={y - 15} textAnchor="middle" fontSize="11" fontWeight="900" className={darkMode ? 'fill-indigo-400' : 'fill-indigo-600'}>{d.nr.toFixed(2)}</text>
-                                    <text x={x} y={height + 20} textAnchor="middle" fontSize="10" fontWeight="bold" className={darkMode ? 'fill-slate-500' : 'fill-slate-400'}>SEM {d.sem}</text>
+                                    <circle cx={x} cy={y} r="4" fill={darkMode ? "#020617" : "white"} stroke={lineColor} strokeWidth="2" />
+                                    <text x={x} y={y - 8} textAnchor="middle" fontSize="9" fontWeight="bold" fill={lineColor}>{d.nr.toFixed(2)}</text>
+                                    <text x={x} y={height + 15} textAnchor="middle" fontSize="8" fontWeight="bold" fill={darkMode ? "#64748b" : "#94a3b8"}>S{d.sem}</text>
                                 </g>
                             );
                         })}
                     </svg>
                 </div>
             );
-        };
+        }
 
-        const Card = ({ children, className = "", darkMode }) => (
-            <div className={`rounded-3xl border transition-all duration-300 ${darkMode ? 'bg-slate-900 border-slate-800 text-slate-100 shadow-2xl' : 'bg-white border-slate-200 text-slate-900 shadow-sm'} ${className}`}>
-                {children}
-            </div>
-        );
-
-        const App = () => {
+        // --- APP MAIN ---
+        function App() {
             const [activeTab, setActiveTab] = useState('dashboard');
             const [darkMode, setDarkMode] = useState(false);
             const [history, setHistory] = useState({});
             const [movedCourses, setMovedCourses] = useState({});
-            const [retakePlan, setRetakePlan] = useState({});
-            const [retakeGrades, setRetakeGrades] = useState({});
-            const [plannerSelection, setPlannerSelection] = useState([]);
-            const [profile, setProfile] = useState({ 
-                name: 'Aswal', 
-                currentSemester: 4, 
-                startYear: 2024,
-                targetSpecializations: ['offshore', 'coastal'],
-                sksPerSemesterAssumption: 20
-            });
-            const [messages, setMessages] = useState([{ role: 'ai', text: 'Halo Aswal! Saya OceanAI Assistant. Saya sudah siap menganalisis kurikulum Teknik Kelautan kamu. Ada yang ingin ditanyakan?' }]);
+            const [profile, setProfile] = useState({ name: 'Mahasiswa', currentSemester: 4, startYear: 2024, targetSpecializations: ['offshore'], sksPerSemesterAssumption: 20 });
+            const [messages, setMessages] = useState([{ role: 'ai', text: 'Halo! Saya OceanAI. Bagaimana perkembangan studimu hari ini?' }]);
             const [chatInput, setChatInput] = useState('');
             const [isTyping, setIsTyping] = useState(false);
-            const [plannerMode, setPlannerMode] = useState('recommendation');
             const chatEndRef = useRef(null);
 
-            // LOGIC HELPERS
             const getCourseSemester = (course) => movedCourses[course.code] !== undefined ? movedCourses[course.code] : course.semester;
-            const isSpecializationCourse = (code) => SPECIALIZATIONS.some(s => s.required.includes(code));
-            const getSpecName = (code) => {
-                const found = SPECIALIZATIONS.filter(s => s.required.includes(code));
-                return found.length > 0 ? found.map(s => s.name.split(' ')[0]).join(', ') : null;
-            };
 
             const semesterStats = useMemo(() => {
-                const sbs = {}; [1, 2, 3, 4, 5, 6, 7, 8].forEach(s => sbs[s] = { totalSks: 0, totalPoints: 0, nr: 0, count: 0, retakeSks: 0 });
-                let sw = 0; let sp = 0;
+                const sbs = {}; [1,2,3,4,5,6,7,8].forEach(s => sbs[s] = { sks: 0, pts: 0, nr: 0, count: 0 });
+                let sw = 0, sp = 0;
                 CURRICULUM_DB.forEach(c => {
                     const es = getCourseSemester(c); const g = history[c.code];
                     if (g && GRADES[g] >= 2.0) { if (c.type === 'Wajib') sw += c.sks; else sp += c.sks; }
-                    if (es >= 1 && es <= 8 && g && GRADES[g] !== undefined) { sbs[es].totalSks += c.sks; sbs[es].totalPoints += (c.sks * GRADES[g]); sbs[es].count += 1; }
+                    if (es >= 1 && es <= 8 && g) { sbs[es].sks += c.sks; sbs[es].pts += (c.sks * GRADES[g]); sbs[es].count += 1; }
                 });
-                
-                Object.entries(retakePlan).forEach(([code, ts]) => {
-                    const c = CURRICULUM_DB.find(x => x.code === code); const pg = retakeGrades[code];
-                    if (c && sbs[ts]) { 
-                        sbs[ts].retakeSks += c.sks; 
-                        if (pg && GRADES[pg] !== undefined) { 
-                            sbs[ts].totalSks += c.sks; 
-                            sbs[ts].totalPoints += (c.sks * GRADES[pg]); 
-                            sbs[ts].count += 1; 
-                        } 
-                    }
+                const gd = []; let cp = 0, cs = 0;
+                [1,2,3,4,5,6,7,8].forEach(s => {
+                    const st = sbs[s]; if (st.sks > 0) { st.nr = st.pts / st.sks; cp += st.pts; cs += st.sks; if (s < profile.currentSemester || st.count > 0) gd.push({ sem: s, nr: st.nr }); }
                 });
-
-                const gd = []; let cp = 0; let cs = 0;
-                [1, 2, 3, 4, 5, 6, 7, 8].forEach(s => {
-                    const st = sbs[s]; if (st.totalSks > 0) { st.nr = st.totalPoints / st.totalSks; cp += st.totalPoints; cs += st.totalSks; if (s <= profile.currentSemester || st.count > 0) gd.push({ sem: s, nr: st.nr }); }
-                });
-                return { bySem: sbs, graphData: gd, ipk: cs > 0 ? (cp/cs).toFixed(2) : "0.00", totalSks: cs, sksLulusWajib: sw, sksLulusPilihan: sp };
-            }, [history, profile.currentSemester, movedCourses, retakePlan, retakeGrades]);
+                return { bySem: sbs, graphData: gd, ipk: cs > 0 ? (cp/cs).toFixed(2) : "0.00", totalSks: cs, sw, sp };
+            }, [history, profile.currentSemester, movedCourses]);
 
             const prediction = useMemo(() => {
-                const remainingSks = Math.max(0, TARGET_SKS_LULUS - semesterStats.totalSks);
-                const semestersNeeded = Math.ceil(remainingSks / profile.sksPerSemesterAssumption);
-                const graduationSemester = profile.currentSemester + semestersNeeded;
-                const graduationYear = profile.startYear + Math.floor((graduationSemester - 1) / 2);
-                const semesterType = graduationSemester % 2 === 0 ? "Genap" : "Ganjil";
-                return { remainingSks, semestersNeeded, graduationYear, semesterType };
+                const rem = Math.max(0, TARGET_SKS_LULUS - semesterStats.totalSks);
+                const needed = Math.ceil(rem / profile.sksPerSemesterAssumption);
+                return { rem, gradYear: profile.startYear + Math.floor((profile.currentSemester + needed - 1) / 2) };
             }, [semesterStats.totalSks, profile]);
 
-            const autoFillPreviousSemesters = () => {
-                const nh = { ...history };
-                CURRICULUM_DB.forEach(c => {
-                    const s = getCourseSemester(c);
-                    if (s < profile.currentSemester && !nh[c.code]) nh[c.code] = 'B';
-                });
-                setHistory(nh);
-            };
-
-            const toggleSpecialization = (id) => {
-                setProfile(prev => {
-                    const current = prev.targetSpecializations;
-                    if (current.includes(id)) return { ...prev, targetSpecializations: current.filter(x => x !== id) };
-                    return { ...prev, targetSpecializations: [...current, id] };
-                });
-            };
-
-            const recommendedCourses = useMemo(() => {
-                return CURRICULUM_DB.filter(c => {
-                    const g = history[c.code];
-                    if (g && GRADES[g] >= 2.0) return false;
-                    return c.prereq.every(p => history[p] && GRADES[history[p]] >= 1.0);
-                }).sort((a, b) => b.sks - a.sks);
-            }, [history]);
-
-            const notPassedCourses = useMemo(() => CURRICULUM_DB.filter(c => !history[c.code] || GRADES[history[c.code]] < 2.0), [history]);
-
-            // --- PERBAIKAN HANDLE SEND MESSAGE (v1beta Sinkron) ---
             const handleSendMessage = async () => {
                 if (!chatInput.trim()) return;
-                const ut = chatInput; 
-                setMessages(prev => [...prev, { role: 'user', text: ut }]); 
-                setChatInput(''); 
-                setIsTyping(true);
-
-                // Buat System Prompt yang sangat detail agar AI pintar
-                const systemPrompt = `Kamu adalah OceanAI Assistant, asisten khusus untuk mahasiswa Teknik Kelautan ITB bernama ${profile.name}.
-                Data Akademik:
-                - IPK: ${semesterStats.ipk}
-                - SKS Lulus: ${semesterStats.totalSks} dari 144
-                - Estimasi Lulus: ${prediction.graduationYear} (Semester ${prediction.semesterType})
-                - Spesialisasi Target: ${profile.targetSpecializations.join(', ')}
-
-                Tugasmu:
-                1. Memberikan saran pemilihan mata kuliah.
-                2. Menghitung strategi nilai untuk menaikkan IPK.
-                3. Memberikan motivasi akademis yang relevan dengan bidang kelautan (Ocean Engineering).
-                Jawablah dengan nada yang profesional, cerdas, namun tetap suportif.`;
-
-                // Gunakan fungsi askGemini yang sudah diperbaiki logic-nya
-                const aiResponse = await askGemini(ut, systemPrompt, messages);
+                const ut = chatInput; setMessages(p => [...p, { role: 'user', text: ut }]); setChatInput(''); setIsTyping(true);
                 
-                setMessages(prev => [...prev, { role: 'ai', text: aiResponse }]); 
-                setIsTyping(false);
+                const systemPrompt = `OceanAI. IPK ${semesterStats.ipk}, SKS ${semesterStats.totalSks}. Gunakan Markdown (- , **).`;
+                try {
+                    const res = await fetch(BACKEND_URL, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            contents: [...messages.map(m=>({role: m.role==='user'?'user':'model', parts:[{text:m.text}]})), {role:'user', parts:[{text:ut}]}], 
+                            systemInstruction: {parts:[{text:systemPrompt}]} 
+                        })
+                    });
+                    const data = await res.json();
+                    const aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || "Maaf, coba lagi.";
+                    setMessages(p => [...p, { role: 'ai', text: aiResponse }]);
+                } catch (e) {
+                    setMessages(p => [...p, { role: 'ai', text: "Error: Hubungi admin untuk koneksi AI." }]);
+                } finally {
+                    setIsTyping(false);
+                }
             };
+
+            const renderMarkdown = (text) => {
+                if (typeof window.marked !== 'undefined' && window.marked.parse) return { __html: marked.parse(text) };
+                return { __html: text.replace(/\n/g, '<br/>') };
+            };
+
+            const moveCourse = (cc, ns) => setMovedCourses(p => ({...p, [cc]: parseInt(ns)}));
 
             useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, isTyping]);
 
             return (
-                <div className={`min-h-screen bg-main ${darkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
+                <div className={`${darkMode ? 'dark bg-app text-white' : 'bg-slate-50 text-slate-900'} min-h-screen transition-all`}>
+                    
                     {/* Header */}
-                    <header className={`sticky top-0 z-50 border-b p-5 flex justify-between items-center transition-colors ${darkMode ? 'bg-slate-900/80 border-slate-800 glass' : 'bg-white/80 border-slate-200 glass shadow-sm'}`}>
-                        <div className="flex items-center gap-3">
-                            <div className="bg-indigo-600 text-white p-2.5 rounded-2xl shadow-xl shadow-indigo-500/30">
-                                <Icon icon={Icons.BookOpen} size={24} />
-                            </div>
-                            <div>
-                                <h1 className="font-black text-2xl tracking-tight leading-none">Ocean<span className="text-indigo-600">Plan</span></h1>
-                                <p className="text-[10px] font-black opacity-30 uppercase tracking-[0.2em] mt-1">Academic Suite v12</p>
-                            </div>
+                    <header className="sticky top-0 z-50 bg-white/90 dark:bg-slate-900/90 border-b dark:border-slate-800 h-12 flex items-center justify-between px-4 glass">
+                        <div className="flex items-center gap-2">
+                            <div className="bg-indigo-600 text-white p-1 rounded-lg shadow-lg"><Icon icon={Icons.BookOpen} size={16} /></div>
+                            <span className="font-bold text-sm tracking-tighter">Ocean<span className="text-indigo-600 font-black">Plan</span></span>
                         </div>
-                        <button onClick={() => setDarkMode(!darkMode)} className={`p-3 rounded-2xl transition-all shadow-sm ${darkMode ? 'bg-slate-800 text-yellow-400 border border-slate-700 hover:bg-slate-700' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}>
-                            {darkMode ? <Icon icon={Icons.Sun} /> : <Icon icon={Icons.Moon} />}
+                        <button onClick={() => setDarkMode(!darkMode)} className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-yellow-400 border dark:border-slate-700 shadow-sm">
+                            {darkMode ? <Icon icon={Icons.Sun} size={16} /> : <Icon icon={Icons.Moon} size={16} />}
                         </button>
                     </header>
 
-                    {/* Navigation */}
-                    <nav className="max-w-5xl mx-auto p-4 flex gap-3 overflow-x-auto scrollbar-hide mb-4">
+                    {/* Nav Bar */}
+                    <nav className="max-w-5xl mx-auto p-2 flex gap-1 overflow-x-auto scrollbar-hide border-b dark:border-slate-800 bg-white/50 dark:bg-slate-900/50">
                         {[
-                            { id: 'dashboard', label: 'Dashboard', icon: Icons.BarChart3 },
+                            { id: 'dashboard', label: 'Home', icon: Icons.BarChart3 },
                             { id: 'input', label: 'Transkrip', icon: Icons.Save },
-                            { id: 'planner', label: 'Strategi', icon: Icons.Target },
                             { id: 'library', label: 'Library', icon: Icons.Database },
                             { id: 'assistant', label: 'Assistant', icon: Icons.MessageSquare }
                         ].map(tab => (
-                            <button 
-                                key={tab.id} 
-                                onClick={() => setActiveTab(tab.id)} 
-                                className={`px-7 py-3.5 rounded-2xl flex items-center gap-3 transition-all whitespace-nowrap font-bold text-sm ${activeTab === tab.id ? 'bg-indigo-600 text-white shadow-2xl shadow-indigo-500/40 scale-105' : (darkMode ? 'bg-slate-900 border-slate-800 hover:bg-slate-800 text-slate-400' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-600') + ' border'}`}
-                            >
-                                <Icon icon={tab.icon} size={20} /> {tab.label}
+                            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-4 py-1.5 rounded-xl flex items-center gap-2 text-[10px] font-bold transition-all ${activeTab === tab.id ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
+                                <Icon icon={tab.icon} size={14} /> {tab.label}
                             </button>
                         ))}
                     </nav>
 
-                    <main className="max-w-5xl mx-auto px-4 pb-20 animate-in">
+                    <main className="max-w-5xl mx-auto p-3 space-y-3 animate-in">
                         
-                        {/* TAB DASHBOARD */}
                         {activeTab === 'dashboard' && (
-                            <div className="space-y-8">
-                                <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
-                                    <Card darkMode={darkMode} className="md:col-span-8 p-10 relative overflow-hidden group">
-                                        <div className="relative z-10">
-                                            <h2 className="text-4xl font-black mb-2 tracking-tight">Halo, {profile.name}!</h2>
-                                            <p className="opacity-60 font-bold mb-8 text-lg">Ocean Engineering &bull; Batch {profile.startYear}</p>
-                                            
-                                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                                                <div className="p-5 rounded-3xl bg-indigo-500/10 border border-indigo-500/20 text-center">
-                                                    <p className="text-[10px] font-black uppercase text-indigo-500 mb-1 tracking-widest">IPK Total</p>
-                                                    <p className="text-3xl font-black text-indigo-600 dark:text-indigo-400">{semesterStats.ipk}</p>
-                                                </div>
-                                                <div className="p-5 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 text-center">
-                                                    <p className="text-[10px] font-black uppercase text-emerald-500 mb-1 tracking-widest">SKS Lulus</p>
-                                                    <p className="text-3xl font-black text-emerald-600 dark:text-emerald-400">{semesterStats.totalSks}</p>
-                                                </div>
-                                                <div className="p-5 rounded-3xl bg-amber-500/10 border border-amber-500/20 text-center">
-                                                    <p className="text-[10px] font-black uppercase text-amber-500 mb-1 tracking-widest">Sisa SKS</p>
-                                                    <p className="text-3xl font-black text-amber-600 dark:text-amber-400">{prediction.remainingSks}</p>
-                                                </div>
-                                                <div className="p-5 rounded-3xl bg-rose-500/10 border border-rose-500/20 text-center">
-                                                    <p className="text-[10px] font-black uppercase text-rose-500 mb-1 tracking-widest">Status</p>
-                                                    <p className="text-3xl font-black text-rose-600 dark:text-rose-400">S{profile.currentSemester}</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="absolute -right-16 -top-16 opacity-[0.03] group-hover:opacity-[0.05] transition-opacity pointer-events-none rotate-12">
-                                            <Icon icon={Icons.GraduationCap} size={350} />
-                                        </div>
-                                    </Card>
-
-                                    <Card darkMode={darkMode} className="md:col-span-4 p-8 bg-gradient-to-br from-indigo-600 to-violet-800 text-white border-none shadow-2xl shadow-indigo-500/30 flex flex-col justify-between">
+                            <div className="space-y-3">
+                                {/* CENTRAL CARD (FINAL DESIGN) */}
+                                <Card darkMode={darkMode} className="p-8 bg-indigo-600 dark:bg-indigo-700 text-white border-none shadow-2xl relative overflow-hidden group">
+                                    <div className="relative z-10 grid md:grid-cols-2 gap-10">
                                         <div>
-                                            <div className="flex items-center gap-3 mb-6">
-                                                <div className="p-2 bg-white/20 rounded-xl">
-                                                    <Icon icon={Icons.Clock} className="text-white" />
-                                                </div>
-                                                <h3 className="font-black text-xs uppercase tracking-[0.2em]">Estimasi Wisuda</h3>
-                                            </div>
-                                            <div className="text-center py-6">
-                                                <p className="text-6xl font-black mb-2 tracking-tighter">{prediction.graduationYear}</p>
-                                                <p className="text-sm font-bold bg-white/20 inline-block px-4 py-1.5 rounded-full">Semester {prediction.semesterType}</p>
+                                            <h2 className="text-3xl font-black mb-2 tracking-tight leading-tight">Halo, {profile.name}!</h2>
+                                            <p className="opacity-80 font-bold mb-8 text-sm">Teknik Kelautan &bull; ITB</p>
+                                            
+                                            <div className="bg-white/10 p-5 rounded-[2rem] border border-white/20 backdrop-blur-md">
+                                                <label className="text-[8px] font-black uppercase tracking-widest mb-2 block opacity-70">Semester Berjalan:</label>
+                                                <select 
+                                                    value={profile.currentSemester} 
+                                                    onChange={(e)=>setProfile({...profile, currentSemester: parseInt(e.target.value)})} 
+                                                    className="w-full bg-white text-indigo-700 p-3 rounded-2xl font-black text-sm outline-none cursor-pointer"
+                                                >
+                                                    {[1,2,3,4,5,6,7,8].map(s => <option key={s} value={s}>Semester {s}</option>)}
+                                                </select>
+                                                <p className="mt-4 text-[9px] opacity-90 italic leading-relaxed">
+                                                    <Icon icon={Icons.Info} size={10} className="inline mr-1" />
+                                                    Pilih S{profile.currentSemester} berarti semester 1-{profile.currentSemester-1} dianggap selesai.
+                                                </p>
                                             </div>
                                         </div>
-                                        <div className="mt-8 p-5 rounded-2xl bg-white/10 border border-white/20 backdrop-blur-md">
-                                            <div className="flex justify-between items-center mb-3">
-                                                <span className="text-[10px] font-black uppercase tracking-widest opacity-80">Asumsi SKS/Sem:</span>
-                                                <span className="text-2xl font-black">{profile.sksPerSemesterAssumption}</span>
-                                            </div>
-                                            <input 
-                                                type="range" min="12" max="24" step="1" 
-                                                value={profile.sksPerSemesterAssumption} 
-                                                onChange={(e) => setProfile({...profile, sksPerSemesterAssumption: parseInt(e.target.value)})}
-                                                className="w-full accent-white h-2 rounded-full cursor-pointer appearance-none bg-indigo-400/50"
-                                            />
-                                        </div>
-                                    </Card>
-                                </div>
 
-                                <div className="grid md:grid-cols-3 gap-8">
-                                    <Card darkMode={darkMode} className="md:col-span-2 p-10">
-                                        <h3 className="font-black text-xl flex items-center gap-3 mb-10">
-                                            <Icon icon={Icons.TrendingUp} className="text-indigo-500"/>
-                                            Grafik Performa Akademik
-                                        </h3>
+                                        <div className="flex flex-col justify-between">
+                                            <div className="grid grid-cols-2 gap-3 mb-6">
+                                                <div className="p-4 rounded-3xl bg-white/10 border border-white/20 text-center">
+                                                    <p className="text-[8px] font-black uppercase opacity-70 mb-1 leading-none">IPK Total</p>
+                                                    <p className="text-3xl font-black leading-none">{semesterStats.ipk}</p>
+                                                </div>
+                                                <div className="p-4 rounded-3xl bg-white/10 border border-white/20 text-center">
+                                                    <p className="text-[8px] font-black uppercase opacity-70 mb-1 leading-none">SKS Lulus</p>
+                                                    <p className="text-3xl font-black leading-none">{semesterStats.totalSks}</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="bg-indigo-900/40 p-6 rounded-[2.5rem] border border-white/10 shadow-inner">
+                                                <div className="flex justify-between items-center mb-4 leading-none">
+                                                    <div className="flex items-center gap-2">
+                                                        <Icon icon={Icons.Clock} className="text-indigo-200" />
+                                                        <h4 className="font-black text-[10px] uppercase tracking-widest">Wisuda</h4>
+                                                    </div>
+                                                    <span className="text-3xl font-black text-amber-400">{prediction.gradYear}</span>
+                                                </div>
+                                                <input type="range" min="12" max="24" value={profile.sksPerSemesterAssumption} onChange={(e)=>setProfile({...profile, sksPerSemesterAssumption: parseInt(e.target.value)})} className="w-full h-1.5 bg-white/20 rounded-full appearance-none cursor-pointer" />
+                                                <div className="flex justify-between text-[8px] font-bold opacity-60 mt-2 uppercase"><span>Asumsi: {profile.sksPerSemesterAssumption} SKS/Sem</span></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <Icon icon={Icons.GraduationCap} size={250} className="absolute -right-20 -bottom-20 opacity-5 pointer-events-none rotate-12" />
+                                </Card>
+
+                                <div className="grid md:grid-cols-2 gap-3">
+                                    <Card darkMode={darkMode} className="p-4">
+                                        <h3 className="text-[9px] font-black mb-4 uppercase opacity-50 flex items-center gap-2 tracking-widest"><Icon icon={Icons.TrendingUp} size={12} />IP Per Semester</h3>
                                         <SimpleLineChart data={semesterStats.graphData} darkMode={darkMode} />
                                     </Card>
-                                    
-                                    <Card darkMode={darkMode} className="p-10">
-                                        <h3 className="font-black text-xl flex items-center gap-3 mb-10">
-                                            <Icon icon={Icons.PieChart} className="text-indigo-500"/>
-                                            Distribusi SKS
-                                        </h3>
-                                        <ProgressBar label="Target Lulus (144)" current={semesterStats.totalSks} max={TARGET_SKS_LULUS} colorClass="bg-indigo-500 shadow-xl" darkMode={darkMode} />
-                                        <ProgressBar label="Wajib Utama" current={semesterStats.sksLulusWajib} max={TARGET_SKS_WAJIB} colorClass="bg-emerald-500 shadow-xl" darkMode={darkMode} />
-                                        <ProgressBar label="Matkul Pilihan" current={semesterStats.sksLulusPilihan} max={TARGET_SKS_PILIHAN} colorClass="bg-orange-500 shadow-xl" darkMode={darkMode} />
+                                    <Card darkMode={darkMode} className="p-4">
+                                        <h3 className="text-[9px] font-black mb-4 uppercase opacity-50 flex items-center gap-2 tracking-widest"><Icon icon={Icons.PieChart} size={12} />Progress SKS</h3>
+                                        <ProgressBar label="Total Kelulusan" current={semesterStats.totalSks} max={144} colorClass="bg-indigo-600 shadow-lg" darkMode={darkMode} />
+                                        <ProgressBar label="Wajib Dasar" current={semesterStats.sw} max={100} colorClass="bg-emerald-500 shadow-lg" darkMode={darkMode} />
+                                        <ProgressBar label="Pilihan Bidang" current={semesterStats.sp} max={44} colorClass="bg-orange-500 shadow-lg" darkMode={darkMode} />
                                     </Card>
                                 </div>
                             </div>
                         )}
 
-                        {/* TAB ASSISTANT */}
-                        {activeTab === 'assistant' && (
-                            <div className={`h-[650px] flex flex-col rounded-[2.5rem] border-2 shadow-2xl overflow-hidden ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-                                <div className="bg-indigo-600 p-8 text-white flex items-center gap-5">
-                                    <div className="bg-white/20 p-3 rounded-2xl shadow-inner">
-                                        <Icon icon={Icons.Bot} size={32} />
-                                    </div>
-                                    <div>
-                                        <h3 className="font-black text-xl tracking-tight">OceanAI Expert</h3>
-                                        <p className="text-xs opacity-70 font-bold flex items-center gap-2"><span className="w-2.5 h-2.5 bg-green-400 rounded-full animate-pulse"></span> Online & Academic Advisor</p>
-                                    </div>
-                                </div>
-                                <div className={`flex-1 overflow-y-auto p-10 space-y-8 ${darkMode ? 'bg-slate-950/60' : 'bg-slate-50/50'}`}>
-                                    {messages.map((m, i) => (
-                                        <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                            <div className={`max-w-[75%] p-6 rounded-[2rem] text-sm leading-relaxed font-medium shadow-md ${m.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none shadow-indigo-500/30' : 'bg-white dark:bg-slate-800 dark:text-slate-200 border dark:border-slate-700 rounded-tl-none'}`}>
-                                                {m.text}
+                        {/* TAB TRANSKRIP (SLIM ROWS) */}
+                        {activeTab === 'input' && (
+                            <div className="space-y-4">
+                                {[1,2,3,4,5,6,7,8].map(s => {
+                                    const courses = CURRICULUM_DB.filter(c => getCourseSemester(c) === s);
+                                    return (
+                                        <div key={s} className="space-y-1">
+                                            <div className="flex items-center gap-2 px-1">
+                                                <span className="text-[10px] font-black text-indigo-600 uppercase tracking-tighter leading-none font-bold">Sem {s}</span>
+                                                <div className="h-[1px] flex-1 bg-slate-200 dark:bg-slate-800 opacity-50"></div>
+                                            </div>
+                                            <div className="grid gap-1">
+                                                {courses.map(c => {
+                                                    const g = history[c.code] || "";
+                                                    const isSpec = isSpecializationCourse(c.code);
+                                                    return (
+                                                        <div key={c.code} className={`flex items-center px-3 py-1.5 border rounded-xl dark:border-slate-800 transition-all ${g ? 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 shadow-sm' : 'bg-slate-50 dark:bg-slate-950 opacity-60'}`}>
+                                                            <div className="flex-1 min-w-0 pr-3">
+                                                                <p className="text-[11px] font-bold truncate leading-tight dark:text-slate-100 text-slate-800">{c.name}</p>
+                                                                <div className="flex items-center gap-2 mt-0.5">
+                                                                    <span className="text-[8px] font-black opacity-40 leading-none">{c.sks} SKS</span>
+                                                                    {isSpec && <span className="text-[8px] font-bold text-amber-500 border border-amber-500/20 px-1 rounded bg-amber-500/5 leading-none tracking-tighter uppercase font-black">Bidang</span>}
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <div className="relative group">
+                                                                    <button className="p-1 text-slate-400 hover:text-indigo-600 transition-colors"><Icon icon={Icons.Move} size={14}/></button>
+                                                                    <div className="absolute right-0 top-full mt-1 hidden group-hover:grid grid-cols-4 gap-1 p-1 bg-white dark:bg-slate-800 border dark:border-slate-700 shadow-xl rounded-xl z-30">
+                                                                        {[1,2,3,4,5,6,7,8].map(ns => <button key={ns} onClick={()=>moveCourse(c.code, ns)} className={`w-7 h-7 flex items-center justify-center rounded-lg text-[10px] font-bold ${ns===s?'bg-indigo-600 text-white':'hover:bg-slate-100 dark:hover:bg-slate-700'}`}>{ns}</button>)}
+                                                                    </div>
+                                                                </div>
+                                                                <select value={g} onChange={(e)=>setHistory({...history, [c.code]: e.target.value})} className={`text-[11px] font-black px-1 py-0.5 rounded-lg outline-none w-14 text-center border dark:border-slate-700 ${g ? 'bg-indigo-50 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300 shadow-sm border-indigo-200' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
+                                                                    <option value="">-</option>
+                                                                    {Object.keys(GRADES).map(v => <option key={v} value={v}>{v}</option>)}
+                                                                </select>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         </div>
-                                    ))}
-                                    {isTyping && <div className="flex gap-2.5 p-4 animate-pulse"><div className="w-2.5 h-2.5 bg-indigo-600 rounded-full animate-bounce"></div><div className="w-2.5 h-2.5 bg-indigo-600 rounded-full animate-bounce delay-100"></div><div className="w-2.5 h-2.5 bg-indigo-600 rounded-full animate-bounce delay-200"></div></div>}
-                                    <div ref={chatEndRef} />
-                                </div>
-                                <div className="p-8 border-t-2 dark:border-slate-800 bg-white dark:bg-slate-900 flex gap-4">
-                                    <input value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()} className={`flex-1 p-5 border-2 rounded-3xl focus:ring-8 focus:ring-indigo-500/10 outline-none transition-all font-bold text-sm ${darkMode ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-400'}`} placeholder="Tanyakan strategi perkuliahan..." />
-                                    <button onClick={handleSendMessage} disabled={isTyping} className="bg-indigo-600 text-white px-8 rounded-3xl hover:scale-105 active:scale-95 transition-all shadow-xl shadow-indigo-500/40">
-                                        <Icon icon={Icons.Send}/>
-                                    </button>
-                                </div>
+                                    );
+                                })}
                             </div>
                         )}
 
-                        {/* ... (TAB LAINNYA TETAP SESUAI KODE VERSI v12 KAMU) ... */}
-                        {activeTab === 'input' && <div className="p-10 text-center italic opacity-30">Tab Transkrip Nilai: Masukkan nilai kamu untuk perhitungan IPK otomatis.</div>}
-                        {activeTab === 'planner' && <div className="p-10 text-center italic opacity-30">Tab Strategi: AI akan menyarankan mata kuliah terbaik untuk semester depan.</div>}
-                        {activeTab === 'library' && <div className="p-10 text-center italic opacity-30">Tab Library: Database mata kuliah Teknik Kelautan.</div>}
+                        {/* AI ASSISTANT */}
+                        {activeTab === 'assistant' && (
+                            <div className="h-[550px] flex flex-col rounded-[2.5rem] border-2 dark:border-slate-800 shadow-2xl overflow-hidden bg-white dark:bg-slate-900 animate-in">
+                                <div className="bg-indigo-600 p-5 text-white flex items-center gap-4 shadow-lg shadow-indigo-600/20">
+                                    <div className="bg-white/20 p-2.5 rounded-2xl shadow-inner shadow-indigo-700/50"><Icon icon={Icons.Bot} size={24} /></div>
+                                    <div><h3 className="font-bold text-sm leading-none mb-1 text-white">OceanAI Expert</h3><p className="text-[9px] opacity-70 font-bold uppercase tracking-[0.2em] leading-none text-white">Academic Advisor</p></div>
+                                </div>
+                                <div className={`flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50 dark:bg-slate-950/50 scrollbar-hide`}>
+                                    {messages.map((m, i) => (
+                                        <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                            <div 
+                                                className={`max-w-[85%] p-4 rounded-[1.8rem] shadow-md markdown-content ${m.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-white dark:bg-slate-800 border dark:border-slate-700 text-slate-700 dark:text-slate-100 rounded-tl-none border-slate-200'}`}
+                                                dangerouslySetInnerHTML={renderMarkdown(m.text)}
+                                            />
+                                        </div>
+                                    ))}
+                                    {isTyping && <div className="flex gap-1.5 p-2"><div className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce"></div><div className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce delay-150"></div></div>}
+                                    <div ref={chatEndRef} />
+                                </div>
+                                <div className="p-4 border-t dark:border-slate-800 flex gap-3 bg-white dark:bg-slate-900">
+                                    <input value={chatInput} onChange={(e)=>setChatInput(e.target.value)} onKeyDown={(e)=>e.key==='Enter'&&handleSendMessage()} className="flex-1 p-3 bg-slate-100 dark:bg-slate-800 border-none rounded-2xl text-xs outline-none font-bold placeholder:opacity-50" placeholder="Tanyakan strategi studimu..." />
+                                    <button onClick={handleSendMessage} disabled={isTyping} className="bg-indigo-600 text-white p-3 rounded-2xl shadow-xl active:scale-90 transition-transform shadow-indigo-500/30"><Icon icon={Icons.Send} size={20}/></button>
+                                </div>
+                            </div>
+                        )}
                     </main>
 
-                    <footer className="p-16 text-center opacity-30 text-[10px] font-black uppercase tracking-[0.4em] space-y-4">
-                        <p>Ocean Engineering &bull; OceanPlan v12 &bull; Developed for Aswal</p>
+                    <footer className="p-16 text-center opacity-30 text-[8px] font-black uppercase tracking-[0.4em] space-y-6 leading-none">
+                        <span>OceanPlan v14.6 Production</span>
                     </footer>
                 </div>
             );
-        };
+        }
+
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
