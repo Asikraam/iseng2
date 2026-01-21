@@ -55,8 +55,8 @@
                 });
                 if (!response.ok) throw new Error("Gagal akses backend");
                 const result = await response.json();
-                return result.candidates?.[0]?.content?.parts?.[0]?.text || "Maaf, asisten sedang sibuk.";
-            } catch (error) {
+                // Pastikan ada tanda tanya (?) untuk mencegah error jika data kosong
+                return result.candidates?.[0]?.content?.parts?.[0]?.text || "Maaf, ada masalah pada response AI.";            } catch (error) {
                 return "Koneksi asisten AI bermasalah. Pastikan API di repo private sudah aktif.";
             }
         };
