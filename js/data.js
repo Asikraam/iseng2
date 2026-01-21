@@ -73,7 +73,7 @@ window.CURRICULUM_DB = [
     { code: 'KL4099', name: 'Tugas Akhir', sks: 4, semester: 8, type: 'Wajib', prereq: [] },
 ];
 
-// Mapping Lucide Icons (Mengambil dari window.lucide yang sudah diload di index.html)
+// Mapping Lucide Icons (Pastikan library Lucide sudah diload di index.html)
 if (window.lucide && window.lucide.icons) {
     window.Icons = {
         BookOpen: window.lucide.icons.BookOpen,
