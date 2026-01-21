@@ -13,7 +13,7 @@ window.askGemini = async (userQuery, systemPrompt, chatHistory = []) => {
     };
 
     try {
-        const response = await fetch(BACKEND_URL, {
+        const response = await fetch(window.BACKEND_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -21,15 +21,9 @@ window.askGemini = async (userQuery, systemPrompt, chatHistory = []) => {
 
         if (!response.ok) throw new Error("Gagal akses backend");
         const result = await response.json();
-        
-        if (result.error) {
-            console.error("Gemini Error:", result.error);
-            return `Error: ${result.error.message}`;
-        }
-
         return result.candidates?.[0]?.content?.parts?.[0]?.text || "Maaf, asisten sedang tidak merespon.";
     } catch (error) {
-        console.error("Fetch Error:", error);
-        return "Koneksi asisten AI bermasalah. Pastikan API di repo private sudah aktif.";
+        console.error("AI Error:", error);
+        return "Koneksi asisten AI bermasalah.";
     }
 };
