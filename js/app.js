@@ -216,7 +216,7 @@ const App = () => {
              const responseText = await window.askGemini(chatInput, prompt, messages);
              setMessages(prev => [...prev, { role: 'ai', text: responseText }]);
         } else {
-             setMessages(prev => [...prev, { role: 'ai', text: "Maaf, sistem AI belum siap. Coba refresh halaman." }]);
+             setMessages(prev => [...prev, { role: 'ai', text: "Maaf, sistem AI belum siap." }]);
         }
         setIsTyping(false);
     };
