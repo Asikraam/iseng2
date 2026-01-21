@@ -1,30 +1,59 @@
-// js/app.js
-// Mengambil hooks dari window.React (karena pakai CDN)
-const { useState, useEffect, useMemo, useRef } = window.React;
+const { useState, useEffect, useMemo, useRef } = React;
+
+// --- GLOBAL HELPERS (Safety Checks) ---
+const getSpecIntersections = (code) => {
+    if (!window.SPECIALIZATIONS) return [];
+    return window.SPECIALIZATIONS.filter(s => s.required.includes(code)).map(s => s.name);
+};
+
+const isSpecializationCourse = (code) => {
+    if (!window.SPECIALIZATIONS) return false;
+    return window.SPECIALIZATIONS.some(s => s.required.includes(code));
+};
+
+const getSpecName = (code) => {
+    if (!window.SPECIALIZATIONS) return null;
+    const found = window.SPECIALIZATIONS.filter(s => s.required.includes(code));
+    return found.length > 0 ? found.map(s => s.name).join(', ') : null;
+};
 
 // --- COMPONENTS ---
 
 // 1. Icon Component (Safe Lucide Wrapper)
 const Icon = ({ name, size = 18, className = "" }) => {
+    // Ambil data ikon langsung dari window.lucide dengan safety check
     const iconData = window.lucide?.icons?.[name];
+    
+    // Jika ikon tidak ditemukan, jangan render apa-apa (prevent crash)
     if (!iconData || !Array.isArray(iconData)) return null;
 
     const [tag, attrs, children] = iconData;
+    
+    // Helper camelCase untuk React props (stroke-width -> strokeWidth)
+    const toCamelCase = (s) => s.replace(/-./g, x => x[1].toUpperCase());
+    const fixAttrs = (attrObj) => {
+        const newAttrs = {};
+        for (const key in attrObj) {
+            newAttrs[toCamelCase(key)] = attrObj[key];
+        }
+        return newAttrs;
+    };
+
     return (
         <svg 
             width={size} height={size} viewBox="0 0 24 24" fill="none" 
             stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" 
-            className={className} 
-            {...attrs}
+            className={className}
+            {...fixAttrs(attrs)}
         >
-            {children.map((child, i) => React.createElement(child[0], { ...child[1], key: i }))}
+            {children.map((child, i) => React.createElement(child[0], { ...fixAttrs(child[1]), key: i }))}
         </svg>
     );
 };
 
 // 2. Card Component
 const Card = ({ children, className = "", darkMode }) => (
-    <div className={`rounded-2xl border transition-all duration-300 ${darkMode ? 'bg-slate-900 border-slate-800 text-slate-100 shadow-xl' : 'bg-white border-slate-200 text-slate-900 shadow-sm'} ${className}`}>
+    <div className={`rounded-3xl border p-6 transition-all ${darkMode ? 'bg-slate-900 border-slate-800 text-slate-100 shadow-xl' : 'bg-white border-slate-200 text-slate-900 shadow-sm'} ${className}`}>
         {children}
     </div>
 );
@@ -32,11 +61,11 @@ const Card = ({ children, className = "", darkMode }) => (
 // 3. ProgressBar Component
 const ProgressBar = ({ label, current, max, colorClass, darkMode }) => (
     <div className="mb-4">
-        <div className="flex justify-between text-[9px] font-bold mb-1 uppercase tracking-widest leading-none">
+        <div className="flex justify-between text-[10px] font-black mb-1.5 uppercase tracking-widest opacity-80">
             <span className={darkMode ? 'text-slate-400' : 'text-slate-500'}>{label}</span>
-            <span className="font-bold">{current}/{max}</span>
+            <span className="font-bold">{current} / {max} SKS</span>
         </div>
-        <div className={`w-full h-1.5 rounded-full ${darkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
+        <div className={`w-full h-2.5 rounded-full ${darkMode ? 'bg-slate-800' : 'bg-slate-200'}`}>
             <div className={`h-full rounded-full transition-all duration-1000 ${colorClass}`} style={{ width: `${Math.min((current/max)*100, 100)}%` }}></div>
         </div>
     </div>
@@ -44,7 +73,7 @@ const ProgressBar = ({ label, current, max, colorClass, darkMode }) => (
 
 // 4. SimpleLineChart Component
 const SimpleLineChart = ({ data, darkMode }) => {
-    if (!data || data.length === 0) return <div className="h-32 flex items-center justify-center text-[10px] opacity-30 italic font-bold tracking-widest">NO DATA</div>;
+    if (!data || data.length === 0) return <div className="h-32 flex items-center justify-center text-[10px] opacity-30 italic font-bold tracking-widest">DATA BELUM TERSEDIA</div>;
     const height = 100; const width = 300; const maxVal = 4.0;
     const points = data.map((d, i) => `${(i/(data.length-1 || 1))*width},${height - (d.nr/maxVal)*height}`).join(' ');
     const gridColor = darkMode ? "#1e293b" : "#f1f5f9"; 
@@ -70,41 +99,62 @@ const SimpleLineChart = ({ data, darkMode }) => {
     );
 };
 
-// --- MAIN APP ---
+// 5. Error Boundary Component
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("UI Error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return <div className="p-10 text-center text-red-500 font-bold">Terjadi kesalahan pada tampilan. Silakan refresh halaman.</div>;
+    }
+    return this.props.children;
+  }
+}
+
+// --- MAIN APP COMPONENT ---
 const App = () => {
     const [activeTab, setActiveTab] = useState('dashboard');
     const [darkMode, setDarkMode] = useState(false);
-    const [history, setHistory] = useState({});
+    const [history, setHistory] = useState({ 
+        'MA1101': 'A', 'FI1101': 'AB', 'MA1201': 'B' 
+    });
     const [movedCourses, setMovedCourses] = useState({});
+    const [retakePlan, setRetakePlan] = useState({});
+    const [retakeGrades, setRetakeGrades] = useState({});
     const [profile, setProfile] = useState({ name: 'Mahasiswa', currentSemester: 4, startYear: 2024, targetSpecializations: ['offshore'], sksPerSemesterAssumption: 20 });
-    const [messages, setMessages] = useState([{ role: 'ai', text: 'Halo! Saya OceanAI. Bagaimana perkembangan studimu hari ini?' }]);
     const [chatInput, setChatInput] = useState('');
-    const [isTyping, setIsTyping] = useState(false);
+    const [messages, setMessages] = useState([{ role: 'ai', text: 'Halo! Saya OceanAI. Ada yang bisa saya bantu terkait rencana studimu?' }]);
     const [plannerMode, setPlannerMode] = useState('recommendation');
     const [plannerSelection, setPlannerSelection] = useState([]);
     const chatEndRef = useRef(null);
+    const [isTyping, setIsTyping] = useState(false);
 
-    // Load Globals with Fallback
+    // Ambil variabel global dengan Fallback Aman
     const GRADES = window.GRADES || {};
     const TARGET_SKS_LULUS = window.TARGET_SKS_LULUS || 144;
     const TARGET_SKS_WAJIB = window.TARGET_SKS_WAJIB || 100;
     const TARGET_SKS_PILIHAN = window.TARGET_SKS_PILIHAN || 44;
-    const CURRICULUM_DB = window.CURRICULUM_DB || [];
+    // Pastikan CURRICULUM_DB selalu array
+    const CURRICULUM_DB = Array.isArray(window.CURRICULUM_DB) ? window.CURRICULUM_DB : [];
     const SPECIALIZATIONS = window.SPECIALIZATIONS || [];
 
     // Helper Functions
     const getCourseSemester = (course) => movedCourses[course.code] !== undefined ? movedCourses[course.code] : course.semester;
-    const isSpecializationCourse = (code) => SPECIALIZATIONS.some(s => s.required.includes(code));
-    const getSpecName = (code) => {
-        const found = SPECIALIZATIONS.filter(s => s.required.includes(code));
-        return found.length > 0 ? found.map(s => s.name).join(', ') : null;
-    };
-    const getSpecIntersections = (code) => SPECIALIZATIONS.filter(s => s.required.includes(code)).map(s => s.name);
 
     // Stats Calculation
     const semesterStats = useMemo(() => {
         let totalSks = 0, totalPoints = 0, sw = 0, sp = 0;
-        const graphData = [];
         const semGroups = {};
         
         if (Array.isArray(CURRICULUM_DB)) {
@@ -112,7 +162,7 @@ const App = () => {
                 const es = getCourseSemester(c);
                 const g = history[c.code];
                 if (g && GRADES[g] >= 2.0) { if (c.type === 'Wajib') sw += c.sks; else sp += c.sks; }
-                if (es >= 1 && es <= 8 && g && GRADES[g] !== undefined) {
+                if (g && GRADES[g] !== undefined) {
                     const points = c.sks * GRADES[g];
                     totalSks += c.sks;
                     totalPoints += points;
@@ -124,9 +174,9 @@ const App = () => {
             });
         }
         
-        Object.keys(semGroups).sort((a,b)=>a-b).forEach(sem => {
-            graphData.push({ sem: sem, nr: semGroups[sem].pts / semGroups[sem].sks });
-        });
+        const graphData = Object.keys(semGroups).sort((a,b)=>a-b).map(sem => ({
+            sem: sem, nr: semGroups[sem].pts / semGroups[sem].sks
+        }));
 
         return { 
             ipk: totalSks > 0 ? (totalPoints/totalSks).toFixed(2) : "0.00", 
@@ -151,28 +201,33 @@ const App = () => {
 
     const notPassedCourses = useMemo(() => CURRICULUM_DB.filter(c => !history[c.code] || GRADES[history[c.code]] < 2.0), [history, CURRICULUM_DB]);
 
-    // Handlers
+    // Actions
     const handleSend = async () => {
         if (!chatInput.trim()) return;
-        const ut = chatInput;
-        setMessages(prev => [...prev, { role: 'user', text: ut }]);
+        
+        const userMsg = { role: 'user', text: chatInput };
+        setMessages(prev => [...prev, userMsg]);
         setChatInput('');
         setIsTyping(true);
 
-        const prompt = `OceanAI. IPK: ${semesterStats.ipk}, SKS: ${semesterStats.sks}, Sisa SKS: ${prediction.rem}. Gunakan Markdown.`;
+        const prompt = `OceanAI. IPK: ${semesterStats.ipk}, SKS: ${semesterStats.sks}, Sisa SKS: ${prediction.rem}. Gunakan Markdown yang rapi.`;
         
         if (typeof window.askGemini === 'function') {
-            const reply = await window.askGemini(ut, prompt, messages);
-            setMessages(prev => [...prev, { role: 'ai', text: reply }]);
+             const responseText = await window.askGemini(chatInput, prompt, messages);
+             setMessages(prev => [...prev, { role: 'ai', text: responseText }]);
         } else {
-            setMessages(prev => [...prev, { role: 'ai', text: "Error: AI Service not loaded." }]);
+             setMessages(prev => [...prev, { role: 'ai', text: "Maaf, sistem AI belum siap. Coba refresh halaman." }]);
         }
         setIsTyping(false);
     };
 
     const toggleSpecialization = (id) => {
         const cur = profile.targetSpecializations;
-        setProfile({...profile, targetSpecializations: cur.includes(id) ? cur.filter(x=>x!==id) : [...cur, id].slice(-8)});
+        if (cur.includes(id)) {
+            setProfile({...profile, targetSpecializations: cur.filter(x => x !== id)});
+        } else if (cur.length < 3) {
+            setProfile({...profile, targetSpecializations: [...cur, id]});
+        }
     };
     
     const autoFillPreviousSemesters = () => {
@@ -182,6 +237,11 @@ const App = () => {
     };
 
     const moveCourse = (cc, ns) => setMovedCourses(p => ({...p, [cc]: parseInt(ns)}));
+    const planRetake = (cc, ts) => setRetakePlan(p => ({...p, [cc]: parseInt(ts)}));
+    const cancelRetake = (cc) => {
+        const newPlan = {...retakePlan}; delete newPlan[cc]; setRetakePlan(newPlan);
+        const newGrades = {...retakeGrades}; delete newGrades[cc]; setRetakeGrades(newGrades);
+    };
 
     // Markdown Renderer
     const renderMarkdown = (text) => {
@@ -191,17 +251,20 @@ const App = () => {
 
     useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, isTyping]);
 
-    if (!CURRICULUM_DB.length) return <div className="p-10 text-center">Loading Database...</div>;
+    // Tampilkan Loading jika data belum siap
+    if (CURRICULUM_DB.length === 0) {
+        return <div className="min-h-screen flex items-center justify-center text-slate-500 font-bold animate-pulse">Memuat Data Kurikulum...</div>;
+    }
 
     return (
-        <div className={`min-h-screen ${darkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'} transition-colors`}>
+        <div className={`min-h-screen ${darkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'} transition-colors duration-300`}>
             {/* Header */}
             <header className={`sticky top-0 z-50 p-5 border-b flex justify-between items-center ${darkMode ? 'bg-slate-900/80 border-slate-800' : 'bg-white/80 border-slate-200'} backdrop-blur-md`}>
                 <div className="flex items-center gap-2">
-                    <div className="bg-indigo-600 text-white p-1 rounded-lg shadow-lg"><Icon name="BookOpen" size={16} /></div>
+                    <div className="bg-indigo-600 text-white p-1 rounded-lg shadow-lg"><Icon name="BookOpen" size={20} /></div>
                     <h1 className="font-black text-2xl tracking-tight">Ocean<span className="text-indigo-600">Plan</span></h1>
                 </div>
-                <button onClick={() => setDarkMode(!darkMode)} className="p-3 rounded-2xl bg-indigo-600/10 text-indigo-600">
+                <button onClick={() => setDarkMode(!darkMode)} className="p-3 rounded-2xl bg-indigo-600/10 text-indigo-600 hover:bg-indigo-600/20 transition-colors">
                     <Icon name={darkMode ? "Sun" : "Moon"} />
                 </button>
             </header>
@@ -209,30 +272,34 @@ const App = () => {
             {/* Nav */}
             <nav className="max-w-5xl mx-auto p-4 flex gap-2 overflow-x-auto scrollbar-hide">
                 {['dashboard', 'input', 'planner', 'library', 'assistant'].map(tab => (
-                    <button key={tab} onClick={() => setActiveTab(tab)} className={`px-6 py-2.5 rounded-2xl font-bold text-sm capitalize transition-all ${activeTab === tab ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white dark:bg-slate-900 border dark:border-slate-800 hover:bg-slate-50'}`}>
+                    <button 
+                        key={tab} onClick={() => setActiveTab(tab)}
+                        className={`px-6 py-2.5 rounded-2xl font-bold text-sm capitalize transition-all ${activeTab === tab ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white dark:bg-slate-900 border dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                    >
                         {tab}
                     </button>
                 ))}
             </nav>
 
-            {/* Main */}
+            {/* Main Content */}
             <main className="max-w-5xl mx-auto p-4 animate-in">
                 
-                {/* DASHBOARD (v14.3 Restored) */}
+                {/* DASHBOARD */}
                 {activeTab === 'dashboard' && (
                     <div className="space-y-6">
-                        <Card darkMode={darkMode} className="bg-indigo-600 dark:bg-indigo-700 text-white border-none relative overflow-hidden shadow-2xl">
+                        {/* Top Card: Profile & Config */}
+                        <Card darkMode={darkMode} className={`relative overflow-hidden shadow-2xl ${darkMode ? 'bg-indigo-900 border-none text-white' : 'bg-white text-slate-900 border-slate-200'}`}>
                             <div className="relative z-10 grid md:grid-cols-2 gap-8">
                                 <div>
                                     <h2 className="text-3xl font-black mb-2">Halo, {profile.name}!</h2>
-                                    <p className="opacity-80 text-sm mb-6">Pusat Konfigurasi Akademik.</p>
+                                    <p className={`opacity-80 text-sm mb-6 ${darkMode ? 'text-indigo-200' : 'text-slate-500'}`}>Pusat Konfigurasi Akademik.</p>
                                     
-                                    <div className="bg-white/10 p-4 rounded-2xl border border-white/20 backdrop-blur-md">
+                                    <div className={`p-5 rounded-2xl border backdrop-blur-md ${darkMode ? 'bg-white/10 border-white/20' : 'bg-slate-50 border-slate-200'}`}>
                                         <label className="text-[10px] font-black uppercase tracking-widest opacity-70 mb-2 block">Semester Berjalan:</label>
                                         <select 
                                             value={profile.currentSemester} 
                                             onChange={(e)=>setProfile({...profile, currentSemester: parseInt(e.target.value)})} 
-                                            className="w-full bg-white text-indigo-700 p-3 rounded-xl font-black text-sm outline-none"
+                                            className={`w-full p-3 rounded-xl font-black text-sm outline-none cursor-pointer ${darkMode ? 'bg-indigo-800 text-white' : 'bg-white text-indigo-700 border border-slate-200'}`}
                                         >
                                             {[1,2,3,4,5,6,7,8].map(s => <option key={s} value={s}>Semester {s}</option>)}
                                         </select>
@@ -241,19 +308,19 @@ const App = () => {
 
                                 <div className="flex flex-col justify-between">
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div className="bg-white/10 p-4 rounded-2xl text-center">
+                                        <div className={`p-4 rounded-2xl text-center border ${darkMode ? 'bg-white/10 border-white/20' : 'bg-indigo-50 border-indigo-100'}`}>
                                             <p className="text-[9px] font-black uppercase opacity-60">IPK</p>
-                                            <p className="text-3xl font-black">{semesterStats.ipk}</p>
+                                            <p className={`text-3xl font-black ${darkMode ? 'text-white' : 'text-indigo-600'}`}>{semesterStats.ipk}</p>
                                         </div>
-                                        <div className="bg-white/10 p-4 rounded-2xl text-center">
+                                        <div className={`p-4 rounded-2xl text-center border ${darkMode ? 'bg-white/10 border-white/20' : 'bg-emerald-50 border-emerald-100'}`}>
                                             <p className="text-[9px] font-black uppercase opacity-60">SKS Lulus</p>
-                                            <p className="text-3xl font-black">{semesterStats.sks}</p>
+                                            <p className={`text-3xl font-black ${darkMode ? 'text-white' : 'text-emerald-600'}`}>{semesterStats.sks}</p>
                                         </div>
                                     </div>
-                                    <div className="bg-indigo-900/40 p-5 rounded-2xl border border-white/10 mt-4">
+                                    <div className={`p-5 rounded-2xl border mt-4 ${darkMode ? 'bg-indigo-950/50 border-white/10' : 'bg-slate-50 border-slate-200'}`}>
                                         <div className="flex justify-between items-center mb-2">
                                             <span className="text-[10px] font-black uppercase tracking-widest">Prediksi Wisuda</span>
-                                            <span className="text-2xl font-black text-amber-400">{prediction.gradYear}</span>
+                                            <span className="text-2xl font-black text-amber-500">{prediction.gradYear}</span>
                                         </div>
                                         <div className="flex items-center gap-4">
                                             <span className="text-[9px] font-bold">Asumsi {profile.sksPerSemesterAssumption} SKS/Sem</span>
@@ -261,7 +328,7 @@ const App = () => {
                                                 type="range" min="12" max="24" 
                                                 value={profile.sksPerSemesterAssumption} 
                                                 onChange={(e)=>setProfile({...profile, sksPerSemesterAssumption: parseInt(e.target.value)})} 
-                                                className="flex-1 accent-white h-1.5 bg-white/20 rounded-full"
+                                                className="flex-1 accent-indigo-600 h-1.5 bg-slate-200 rounded-full"
                                             />
                                         </div>
                                     </div>
@@ -283,16 +350,19 @@ const App = () => {
                         </div>
                         
                         <Card darkMode={darkMode}>
-                            <h3 className="font-bold mb-4 text-sm uppercase tracking-widest opacity-60">Spesialisasi Fokus</h3>
+                            <h3 className="font-bold mb-4 text-sm uppercase tracking-widest opacity-60">
+                                Spesialisasi Fokus (Pilih Max 3)
+                                <span className="ml-2 text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">{profile.targetSpecializations.length}/3</span>
+                            </h3>
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                 {SPECIALIZATIONS.map(s => {
                                     const isSel = profile.targetSpecializations.includes(s.id);
                                     return (
                                         <button 
                                             key={s.id} onClick={()=>toggleSpecialization(s.id)}
-                                            className={`p-3 rounded-xl border text-left text-xs transition-all ${isSel ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'hover:bg-slate-100 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-800'}`}
+                                            className={`p-4 rounded-2xl border text-left text-xs transition-all ${isSel ? 'bg-indigo-600 text-white border-indigo-600 shadow-md ring-2 ring-indigo-200' : 'hover:bg-slate-50 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-800'}`}
                                         >
-                                            <span className="block font-bold mb-1">{s.name}</span>
+                                            <span className="block font-bold mb-1 text-sm">{s.name}</span>
                                             <span className={`block text-[10px] opacity-60 ${isSel ? 'text-indigo-100' : ''}`}>{s.desc}</span>
                                         </button>
                                     );
@@ -302,69 +372,67 @@ const App = () => {
                     </div>
                 )}
 
-                {/* INPUT TRANSKRIP (Compact Rows) */}
+                {/* INPUT TRANSKRIP */}
                 {activeTab === 'input' && (
                     <div className="space-y-6">
                         <Card darkMode={darkMode}>
-                            <div className="flex justify-between items-center">
+                            <div className="flex justify-between items-center mb-6">
                                 <div>
                                     <h2 className="text-xl font-black">Input Transkrip</h2>
                                     <p className="opacity-60 text-xs">Isi nilai mata kuliah yang telah diselesaikan.</p>
                                 </div>
-                                <button onClick={autoFillPreviousSemesters} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg hover:bg-indigo-700">Auto-Fill TPB</button>
+                                <button onClick={autoFillPreviousSemesters} className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-lg hover:bg-indigo-700 transition-colors">Auto-Fill TPB</button>
                             </div>
-                        </Card>
+                            
+                            <div className="space-y-8">
+                                {[1,2,3,4,5,6,7,8].map(s => {
+                                    const courses = CURRICULUM_DB.filter(c => getCourseSemester(c) === s);
+                                    if (courses.length === 0) return null;
 
-                        {[1,2,3,4,5,6,7,8].map(s => {
-                            const courses = CURRICULUM_DB.filter(c => getCourseSemester(c) === s);
-                            if (courses.length === 0) return null;
-
-                            return (
-                                <div key={s} className="space-y-2">
-                                    <div className="flex items-center gap-2 px-1">
-                                        <span className="text-[10px] font-black text-indigo-600 uppercase tracking-tighter">Semester {s}</span>
-                                        <div className="h-[1px] flex-1 bg-slate-200 dark:bg-slate-800 opacity-50"></div>
-                                    </div>
-                                    <div className="grid gap-2">
-                                        {courses.map(c => {
-                                            const g = history[c.code] || "";
-                                            const isSpec = isSpecializationCourse(c.code);
-                                            return (
-                                                <div key={c.code} className={`flex items-center px-3 py-1.5 border rounded-xl dark:border-slate-800 transition-all ${g ? 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 shadow-sm' : 'bg-slate-50 dark:bg-slate-950 opacity-60'}`}>
-                                                    <div className="w-14 hidden sm:block opacity-30 font-mono text-[9px]">{c.code}</div>
-                                                    <div className="flex-1 min-w-0 pr-3">
-                                                        <p className="text-[11px] font-bold truncate leading-tight dark:text-slate-100 text-slate-800">{c.name}</p>
-                                                        <div className="flex items-center gap-2 mt-0.5">
-                                                            <span className="text-[8px] font-black opacity-40 leading-none">{c.sks} SKS</span>
-                                                            {isSpec && <span className="text-[8px] font-bold text-amber-500 border border-amber-500/20 px-1 rounded bg-amber-500/5 leading-none tracking-tighter uppercase">Bidang</span>}
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-center gap-1.5">
-                                                        <div className="relative group">
-                                                            <button className="p-1 text-slate-400 hover:text-indigo-600 transition-colors"><Icon name="Move" size={14}/></button>
-                                                            <div className="absolute right-0 top-full mt-1 hidden group-hover:grid grid-cols-4 gap-1 p-1 bg-white dark:bg-slate-800 border dark:border-slate-700 shadow-xl rounded-xl z-30">
-                                                                {[1,2,3,4,5,6,7,8].map(ns => <button key={ns} onClick={()=>moveCourse(c.code, ns)} className={`w-7 h-7 flex items-center justify-center rounded-lg text-[10px] font-bold ${ns===s?'bg-indigo-600 text-white':'hover:bg-slate-100 dark:hover:bg-slate-700'}`}>{ns}</button>)}
+                                    return (
+                                        <div key={s} className="border rounded-2xl p-1 dark:border-slate-800">
+                                            <div className={`px-4 py-2 font-black text-xs uppercase tracking-widest border-b ${darkMode ? 'bg-slate-800/50 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-100 text-slate-500'}`}>
+                                                Semester {s}
+                                            </div>
+                                            <div className="divide-y dark:divide-slate-800">
+                                                {courses.map(c => {
+                                                    const g = history[c.code] || "";
+                                                    const isSpec = isSpecializationCourse(c.code);
+                                                    return (
+                                                        <div key={c.code} className="flex justify-between items-center p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                                                            <div>
+                                                                <div className="font-bold text-sm flex items-center gap-2">
+                                                                    <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 opacity-70">{c.code}</span>
+                                                                    {c.name}
+                                                                </div>
+                                                                <div className="text-[10px] opacity-50 mt-1 uppercase font-bold tracking-wider">{c.sks} SKS • {c.type}</div>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="relative group">
+                                                                    <button className="p-1.5 text-slate-400 hover:text-indigo-600"><Icon name="Move" size={14}/></button>
+                                                                    <div className="absolute right-0 top-full mt-1 hidden group-hover:grid grid-cols-4 gap-1 p-2 bg-white dark:bg-slate-800 border dark:border-slate-700 shadow-xl rounded-xl z-30 w-40">{[1,2,3,4,5,6,7,8].map(ns => <button key={ns} onClick={()=>moveCourse(c.code, ns)} className={`w-8 h-8 flex items-center justify-center rounded-lg text-[10px] font-bold ${ns===s?'bg-indigo-600 text-white':'hover:bg-slate-100 dark:hover:bg-slate-700'}`}>{ns}</button>)}</div>
+                                                                </div>
+                                                                <select 
+                                                                    value={g} 
+                                                                    onChange={(e) => setHistory({...history, [c.code]: e.target.value})}
+                                                                    className={`bg-transparent border rounded-xl px-3 py-2 text-sm outline-none font-bold cursor-pointer ${darkMode ? 'border-slate-700 bg-slate-800 hover:border-slate-600' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                                                                >
+                                                                    <option value="">-</option>
+                                                                    {Object.keys(GRADES).map(g => <option key={g} value={g}>{g}</option>)}
+                                                                </select>
                                                             </div>
                                                         </div>
-                                                        <select 
-                                                            value={g} 
-                                                            onChange={(e) => setHistory({...history, [c.code]: e.target.value})}
-                                                            className={`text-[11px] font-black px-1 py-0.5 rounded-lg outline-none w-14 text-center border dark:border-slate-700 ${g ? 'bg-indigo-50 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300 shadow-sm border-indigo-200' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}
-                                                        >
-                                                            <option value="">-</option>
-                                                            {Object.keys(GRADES).map(v => <option key={v} value={v}>{v}</option>)}
-                                                        </select>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            );
-                        })}
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </Card>
                     </div>
                 )}
-
+                
                 {/* STRATEGI (PLANNER) */}
                 {activeTab === 'planner' && (
                     <div className="grid md:grid-cols-2 gap-4 h-[600px]">
@@ -404,7 +472,7 @@ const App = () => {
                         </div>
                     </div>
                 )}
-
+                
                 {/* LIBRARY */}
                 {activeTab === 'library' && (
                     <div className="space-y-3">
@@ -452,7 +520,7 @@ const App = () => {
                             {messages.map((m, i) => (
                                 <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                     <div 
-                                        className={`p-4 rounded-2xl max-w-[85%] text-sm shadow-md markdown-content ${m.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-white dark:bg-slate-800 border dark:border-slate-700 text-slate-800 dark:text-slate-100 rounded-tl-none'}`}
+                                        className={`p-4 rounded-2xl max-w-[85%] text-sm shadow-md markdown-content ${m.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-white dark:bg-slate-900 border dark:border-slate-700 text-slate-800 dark:text-slate-100 rounded-tl-none border-slate-200 shadow-sm'}`}
                                         dangerouslySetInnerHTML={renderMarkdown(m.text)}
                                     />
                                 </div>
@@ -476,7 +544,7 @@ const App = () => {
     );
 };
 
-// Safe Mounting for React 18
+// Safe Mounting Logic (React 18)
 const container = document.getElementById('root');
 if (container) {
     if (!container._reactRoot) {
@@ -484,11 +552,16 @@ if (container) {
     }
     const root = container._reactRoot;
     
-    // Gunakan try-catch di level root agar jika ada error tidak crash total
     try {
-        root.render(<App />);
+        root.render(
+            <ErrorBoundary>
+                <App />
+            </ErrorBoundary>
+        );
     } catch(e) {
         console.error("Render Error:", e);
-        container.innerHTML = '<div class="p-10 text-red-500">Gagal memuat aplikasi. Coba refresh halaman.</div>';
+        container.innerHTML = '<div class="p-10 text-red-500 font-bold text-center">Gagal memuat aplikasi. Coba refresh halaman.</div>';
     }
+} else {
+    console.error("Root element not found");
 }
