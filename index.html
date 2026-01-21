@@ -29,30 +29,46 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // --- KONFIGURASI REMOTE BACKEND ---
-        // Masukkan URL Vercel dari repo private kamu di sini
-        const BACKEND_URL = "https://rahasia-iseng2.vercel.app/api/chat"; 
-
-        const TARGET_SKS_LULUS = 144;
-        const TARGET_SKS_WAJIB = 100;
-        const TARGET_SKS_PILIHAN = 44;
-        const MAX_SKS_ABSOLUTE = 24;
-
-        // --- API CALL CONFIG ---
+        // Update fungsi askGemini di frontend kamu (Baris 33-56):
         const askGemini = async (userQuery, systemPrompt, chatHistory = []) => {
-            const contents = chatHistory.map(msg => ({
-                role: msg.role === 'user' ? 'user' : 'model',
-                parts: [{ text: msg.text }]
-            }));
-            contents.push({ role: 'user', parts: [{ text: userQuery }] });
-            const payload = { contents, systemInstruction: { parts: [{ text: systemPrompt }] } };
+        // 1. Susun history chat dengan benar
+        const contents = chatHistory.map(msg => ({
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: [{ text: msg.text }]
+        }));
+    
+        // 2. Tambahkan pesan user terbaru
+        contents.push({ role: 'user', parts: [{ text: userQuery }] });
 
-            try {
-                const response = await fetch(BACKEND_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
+    // 3. Susun payload sesuai yang diekspektasikan backend v1beta
+    const payload = { 
+        contents: contents, 
+        systemInstruction: { 
+            parts: [{ text: systemPrompt }] 
+        } 
+    };
+
+    try {
+        const response = await fetch(BACKEND_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        const result = await response.json();
+        
+        // Cek jika ada error dari Google yang diteruskan backend
+        if (result.error) {
+            console.error("Gemini Error:", result.error);
+            return `Error: ${result.error.message}`;
+        }
+
+        return result.candidates?.[0]?.content?.parts?.[0]?.text || "Maaf, asisten sedang tidak merespon.";
+    } catch (error) {
+        console.error("Fetch Error:", error);
+        return "Koneksi ke server bermasalah.";
+    }
+};
                 if (!response.ok) throw new Error("Gagal akses backend");
                 const result = await response.json();
                 return result.candidates?.[0]?.content?.parts?.[0]?.text || "Maaf, ada masalah pada response AI.";
