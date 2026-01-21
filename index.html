@@ -4,18 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OceanPlan - Academic Suite</title>
-    <!-- Google Fonts: Poppins -->
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <!-- Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Marked.js (Markdown Parser) -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     
     <style>
@@ -27,13 +21,11 @@
         .glass { backdrop-filter: blur(12px); }
         input[type="range"] { accent-color: #6366f1; }
         
-        /* Tema Warna Kustom */
         .dark .bg-app { background-color: #020617; } 
         .dark .bg-card { background-color: #0f172a; border-color: #1e293b; }
         .dark .text-main { color: #f8fafc; }
         .dark .text-sub { color: #94a3b8; }
 
-        /* --- STYLING JAWABAN AI --- */
         .markdown-content { font-size: 0.85rem; line-height: 1.6; }
         .markdown-content p { margin-bottom: 0.75rem; }
         .markdown-content p:last-child { margin-bottom: 0; }
@@ -51,12 +43,13 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // --- CONSTANTS ---
         const GRADES = { 'A': 4.0, 'AB': 3.5, 'B': 3.0, 'BC': 2.5, 'C': 2.0, 'D': 1.0, 'E': 0.0, 'T': 0.0 };
         const TARGET_SKS_LULUS = 144;
         const TARGET_SKS_WAJIB = 100;
         const TARGET_SKS_PILIHAN = 44;
-        const BACKEND_URL = "/api/chat"; 
+        
+        // 🔥 GANTI INI DENGAN URL BACKEND KAMU
+        const BACKEND_URL = "https://rahasia-iseng2.vercel.app/api/chat";
 
         const SPECIALIZATIONS = [
             { id: 'offshore', name: 'Lepas Pantai', required: ['KL4101', 'KL4102'], desc: 'Desain anjungan minyak & gas.' },
@@ -92,19 +85,13 @@
             { code: 'KL4099', name: 'Tugas Akhir', sks: 4, semester: 8, type: 'Wajib', prereq: [] },
         ];
 
-        // --- HELPERS (Global Scope) ---
         function getSpecIntersections(code) {
             return SPECIALIZATIONS.filter(s => s.required.includes(code)).map(s => s.name);
         }
         function isSpecializationCourse(code) {
             return SPECIALIZATIONS.some(s => s.required.includes(code));
         }
-        function getSpecName(code) {
-            const found = SPECIALIZATIONS.filter(s => s.required.includes(code));
-            return found.length > 0 ? found.map(s => s.name).join(', ') : null;
-        }
 
-        // --- COMPONENTS ---
         function Icon({ icon, size = 18, className = "" }) {
             if (!icon) return null;
             return (
@@ -115,14 +102,12 @@
         }
 
         const Icons = {
-        BookOpen: lucide.icons.BookOpen, BarChart3: lucide.icons.BarChart3, Save: lucide.icons.Save,
-        Target: lucide.icons.Target, Database: lucide.icons.Database, MessageSquare: lucide.icons.MessageSquare,
-        Sun: lucide.icons.Sun, Moon: lucide.icons.Moon, Info: lucide.icons.Info, CheckCircle: lucide.icons.CheckCircle,
-        Clock: lucide.icons.Clock, TrendingUp: lucide.icons.TrendingUp, PieChart: lucide.icons.PieChart,
-        Award: lucide.icons.Award, Zap: lucide.icons.Zap, Plus: lucide.icons.Plus, X: lucide.icons.X,
-        Move: lucide.icons.Move, Send: lucide.icons.Send,
-        Bot: lucide.icons.Bot,  // ← TAMBAHKAN INI
-        GraduationCap: lucide.icons.GraduationCap  // ← DAN INI
+            BookOpen: lucide.icons.BookOpen, BarChart3: lucide.icons.BarChart3, Save: lucide.icons.Save,
+            Target: lucide.icons.Target, Database: lucide.icons.Database, MessageSquare: lucide.icons.MessageSquare,
+            Sun: lucide.icons.Sun, Moon: lucide.icons.Moon, Info: lucide.icons.Info, CheckCircle: lucide.icons.CheckCircle,
+            Clock: lucide.icons.Clock, TrendingUp: lucide.icons.TrendingUp, PieChart: lucide.icons.PieChart,
+            Award: lucide.icons.Award, Zap: lucide.icons.Zap, Plus: lucide.icons.Plus, X: lucide.icons.X,
+            Move: lucide.icons.Move, Send: lucide.icons.Send, Bot: lucide.icons.Bot, GraduationCap: lucide.icons.GraduationCap
         };
 
         function Card({ children, className = "", darkMode }) {
@@ -174,7 +159,6 @@
             );
         }
 
-        // --- APP MAIN ---
         function App() {
             const [activeTab, setActiveTab] = useState('dashboard');
             const [darkMode, setDarkMode] = useState(false);
@@ -211,22 +195,52 @@
 
             const handleSendMessage = async () => {
                 if (!chatInput.trim()) return;
-                const ut = chatInput; setMessages(p => [...p, { role: 'user', text: ut }]); setChatInput(''); setIsTyping(true);
                 
-                const systemPrompt = `OceanAI. IPK ${semesterStats.ipk}, SKS ${semesterStats.totalSks}. Gunakan Markdown (- , **).`;
+                const ut = chatInput; 
+                setMessages(p => [...p, { role: 'user', text: ut }]); 
+                setChatInput(''); 
+                setIsTyping(true);
+                
+                const systemPrompt = `Kamu adalah OceanAI, asisten akademik mahasiswa Teknik Kelautan ITB. 
+                
+Data mahasiswa saat ini:
+- IPK: ${semesterStats.ipk}
+- Total SKS: ${semesterStats.totalSks}
+
+Berikan saran yang ringkas, jelas, dan actionable dalam format Markdown dengan:
+- Gunakan bullet points (-)
+- Bold (**) untuk emphasis penting
+- Maksimal 150 kata`;
+                
                 try {
+                    console.log('🚀 Mengirim ke backend:', BACKEND_URL);
+                    
                     const res = await fetch(BACKEND_URL, {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ 
                             contents: [...messages.map(m=>({role: m.role==='user'?'user':'model', parts:[{text:m.text}]})), {role:'user', parts:[{text:ut}]}], 
                             systemInstruction: {parts:[{text:systemPrompt}]} 
                         })
                     });
+                    
+                    console.log('📥 Response status:', res.status);
+                    
+                    if (!res.ok) {
+                        const errorText = await res.text();
+                        console.error('❌ Backend error:', errorText);
+                        throw new Error(`Backend returned ${res.status}: ${errorText.substring(0, 100)}`);
+                    }
+                    
                     const data = await res.json();
-                    const aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || "Maaf, coba lagi.";
+                    console.log('✅ Response data:', data);
+                    
+                    const aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || "Maaf, tidak ada response dari AI.";
                     setMessages(p => [...p, { role: 'ai', text: aiResponse }]);
+                    
                 } catch (e) {
-                    setMessages(p => [...p, { role: 'ai', text: "Error: Hubungi admin untuk koneksi AI." }]);
+                    console.error('❌ Error:', e);
+                    setMessages(p => [...p, { role: 'ai', text: `**Error koneksi:**\n\n${e.message}\n\nCek console (F12) untuk detail atau hubungi admin.` }]);
                 } finally {
                     setIsTyping(false);
                 }
@@ -244,7 +258,6 @@
             return (
                 <div className={`${darkMode ? 'dark bg-app text-white' : 'bg-slate-50 text-slate-900'} min-h-screen transition-all`}>
                     
-                    {/* Header */}
                     <header className="sticky top-0 z-50 bg-white/90 dark:bg-slate-900/90 border-b dark:border-slate-800 h-12 flex items-center justify-between px-4 glass">
                         <div className="flex items-center gap-2">
                             <div className="bg-indigo-600 text-white p-1 rounded-lg shadow-lg"><Icon icon={Icons.BookOpen} size={16} /></div>
@@ -255,7 +268,6 @@
                         </button>
                     </header>
 
-                    {/* Nav Bar */}
                     <nav className="max-w-5xl mx-auto p-2 flex gap-1 overflow-x-auto scrollbar-hide border-b dark:border-slate-800 bg-white/50 dark:bg-slate-900/50">
                         {[
                             { id: 'dashboard', label: 'Home', icon: Icons.BarChart3 },
@@ -273,7 +285,6 @@
                         
                         {activeTab === 'dashboard' && (
                             <div className="space-y-3">
-                                {/* CENTRAL CARD (FINAL DESIGN) */}
                                 <Card darkMode={darkMode} className="p-8 bg-indigo-600 dark:bg-indigo-700 text-white border-none shadow-2xl relative overflow-hidden group">
                                     <div className="relative z-10 grid md:grid-cols-2 gap-10">
                                         <div>
@@ -339,7 +350,6 @@
                             </div>
                         )}
 
-                        {/* TAB TRANSKRIP (SLIM ROWS) */}
                         {activeTab === 'input' && (
                             <div className="space-y-4">
                                 {[1,2,3,4,5,6,7,8].map(s => {
@@ -385,7 +395,6 @@
                             </div>
                         )}
 
-                        {/* AI ASSISTANT */}
                         {activeTab === 'assistant' && (
                             <div className="h-[550px] flex flex-col rounded-[2.5rem] border-2 dark:border-slate-800 shadow-2xl overflow-hidden bg-white dark:bg-slate-900 animate-in">
                                 <div className="bg-indigo-600 p-5 text-white flex items-center gap-4 shadow-lg shadow-indigo-600/20">
@@ -410,10 +419,18 @@
                                 </div>
                             </div>
                         )}
+
+                        {activeTab === 'library' && (
+                            <Card darkMode={darkMode} className="p-8 text-center">
+                                <Icon icon={Icons.Database} size={48} className="mx-auto mb-4 opacity-30" />
+                                <h3 className="text-xl font-bold mb-2">Library Coming Soon</h3>
+                                <p className="text-sm opacity-60">Database mata kuliah dan spesialisasi</p>
+                            </Card>
+                        )}
                     </main>
 
                     <footer className="p-16 text-center opacity-30 text-[8px] font-black uppercase tracking-[0.4em] space-y-6 leading-none">
-                        <span>OceanPlan v14.6 Production</span>
+                        <span>OceanPlan v14.7 • Secure Backend</span>
                     </footer>
                 </div>
             );
