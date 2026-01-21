@@ -7,7 +7,7 @@ window.TARGET_SKS_WAJIB = 100;
 window.TARGET_SKS_PILIHAN = 44;
 window.MAX_SKS_ABSOLUTE = 24;
 
-// Data Spesialisasi
+// Data Spesialisasi (8 Bidang)
 window.SPECIALIZATIONS = [
     { id: 'offshore', name: 'Lepas Pantai', required: ['KL4101', 'KL4102'], desc: 'Desain anjungan minyak & gas.' },
     { id: 'coastal', name: 'Rekayasa Pantai', required: ['KL4201', 'KL3202'], desc: 'Penanganan abrasi & reklamasi.' },
@@ -15,20 +15,20 @@ window.SPECIALIZATIONS = [
     { id: 'ocean_modelling', name: 'Pemodelan', required: ['KL4202', 'KL2205'], desc: 'Simulasi arus & tsunami.' },
     { id: 'geotech', name: 'Geoteknik', required: ['KL3103', 'KL3204'], desc: 'Pondasi Dasar Laut.' },
     { id: 'environment', name: 'Lingkungan', required: ['KL4110'], desc: 'AMDAL & konservasi.' },
-    { id: 'energy', name: 'Energi Laut', required: ['KL4108', 'KL4208'], desc: 'Energi terbarukan arus laut.' },
+    { id: 'energy', name: 'Energia Laut', required: ['KL4108', 'KL4208'], desc: 'Energi terbarukan arus laut.' },
     { id: 'acoustics', name: 'Akustik', required: ['KL3104'], desc: 'Sonar & bawah air.' },
 ];
 
 // Database Kurikulum Lengkap (S1-S8)
 window.CURRICULUM_DB = [
-    // Semester 1
+    // Semester 1 (TPB)
     { code: 'MA1101', name: 'Matematika IA', sks: 4, semester: 1, type: 'Wajib', prereq: [] },
     { code: 'FI1101', name: 'Fisika Dasar IA', sks: 4, semester: 1, type: 'Wajib', prereq: [] },
     { code: 'KI1101', name: 'Kimia Dasar IA', sks: 3, semester: 1, type: 'Wajib', prereq: [] },
     { code: 'KU1102', name: 'Pengenalan Komputasi', sks: 3, semester: 1, type: 'Wajib', prereq: [] },
     { code: 'KU1011', name: 'Tata Tulis Karya Ilmiah', sks: 2, semester: 1, type: 'Wajib', prereq: [] },
     { code: 'KU1001', name: 'Olahraga', sks: 2, semester: 1, type: 'Wajib', prereq: [] },
-    // Semester 2
+    // Semester 2 (TPB)
     { code: 'MA1201', name: 'Matematika IIA', sks: 4, semester: 2, type: 'Wajib', prereq: ['MA1101'] },
     { code: 'FI1201', name: 'Fisika Dasar IIA', sks: 4, semester: 2, type: 'Wajib', prereq: ['FI1101'] },
     { code: 'KI1201', name: 'Kimia Dasar IIA', sks: 3, semester: 2, type: 'Wajib', prereq: ['KI1101'] },
@@ -73,15 +73,30 @@ window.CURRICULUM_DB = [
     { code: 'KL4099', name: 'Tugas Akhir', sks: 4, semester: 8, type: 'Wajib', prereq: [] },
 ];
 
-// Mapping Lucide Icons (Pastikan library Lucide sudah diload di index.html)
-if (typeof lucide !== 'undefined' && lucide.icons) {
+// Mapping Lucide Icons (Mengambil dari window.lucide yang sudah diload di index.html)
+if (window.lucide && window.lucide.icons) {
     window.Icons = {
-        BookOpen: lucide.icons.BookOpen, BarChart3: lucide.icons.BarChart3, Save: lucide.icons.Save,
-        Target: lucide.icons.Target, Database: lucide.icons.Database, MessageSquare: lucide.icons.MessageSquare,
-        Sun: lucide.icons.Sun, Moon: lucide.icons.Moon, Info: lucide.icons.Info, CheckCircle: lucide.icons.CheckCircle,
-        Clock: lucide.icons.Clock, TrendingUp: lucide.icons.TrendingUp, PieChart: lucide.icons.PieChart,
-        Award: lucide.icons.Award, Zap: lucide.icons.Zap, Plus: lucide.icons.Plus, X: lucide.icons.X,
-        Move: lucide.icons.Move, Send: lucide.icons.Send, GraduationCap: lucide.icons.GraduationCap,
-        Minus: lucide.icons.Minus
+        BookOpen: window.lucide.icons.BookOpen,
+        BarChart3: window.lucide.icons.BarChart3,
+        Save: window.lucide.icons.Save,
+        Target: window.lucide.icons.Target,
+        Database: window.lucide.icons.Database,
+        MessageSquare: window.lucide.icons.MessageSquare,
+        Sun: window.lucide.icons.Sun,
+        Moon: window.lucide.icons.Moon,
+        Info: window.lucide.icons.Info,
+        CheckCircle: window.lucide.icons.CheckCircle,
+        Clock: window.lucide.icons.Clock,
+        TrendingUp: window.lucide.icons.TrendingUp,
+        PieChart: window.lucide.icons.PieChart,
+        Award: window.lucide.icons.Award,
+        Zap: window.lucide.icons.Zap,
+        Plus: window.lucide.icons.Plus,
+        X: window.lucide.icons.X,
+        Move: window.lucide.icons.Move,
+        Send: window.lucide.icons.Send,
+        GraduationCap: window.lucide.icons.GraduationCap,
+        Minus: window.lucide.icons.Minus,
+        ChevronRight: window.lucide.icons.ChevronRight
     };
 }
