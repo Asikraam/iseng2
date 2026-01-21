@@ -1,41 +1,20 @@
 const { useState, useEffect, useMemo, useRef } = React;
-
-// --- GLOBAL HELPERS (Safety Checks) ---
-const getSpecIntersections = (code) => {
-    if (!window.SPECIALIZATIONS) return [];
-    return window.SPECIALIZATIONS.filter(s => s.required.includes(code)).map(s => s.name);
-};
-
-const isSpecializationCourse = (code) => {
-    if (!window.SPECIALIZATIONS) return false;
-    return window.SPECIALIZATIONS.some(s => s.required.includes(code));
-};
-
-const getSpecName = (code) => {
-    if (!window.SPECIALIZATIONS) return null;
-    const found = window.SPECIALIZATIONS.filter(s => s.required.includes(code));
-    return found.length > 0 ? found.map(s => s.name).join(', ') : null;
-};
+const { createRoot } = ReactDOM;
 
 // --- COMPONENTS ---
 
-// 1. Icon Component (Safe Lucide Wrapper)
+// 1. Icon Component
 const Icon = ({ name, size = 18, className = "" }) => {
-    // Ambil data ikon langsung dari window.lucide dengan safety check
     const iconData = window.lucide?.icons?.[name];
-    
-    // Jika ikon tidak ditemukan, jangan render apa-apa (prevent crash)
     if (!iconData || !Array.isArray(iconData)) return null;
 
     const [tag, attrs, children] = iconData;
     
-    // Helper camelCase untuk React props (stroke-width -> strokeWidth)
+    // Helper camelCase
     const toCamelCase = (s) => s.replace(/-./g, x => x[1].toUpperCase());
-    const fixAttrs = (attrObj) => {
+    const fixAttrs = (attrs) => {
         const newAttrs = {};
-        for (const key in attrObj) {
-            newAttrs[toCamelCase(key)] = attrObj[key];
-        }
+        for (const key in attrs) newAttrs[toCamelCase(key)] = attrs[key];
         return newAttrs;
     };
 
@@ -63,7 +42,7 @@ const ProgressBar = ({ label, current, max, colorClass, darkMode }) => (
     <div className="mb-4">
         <div className="flex justify-between text-[10px] font-black mb-1.5 uppercase tracking-widest opacity-80">
             <span className={darkMode ? 'text-slate-400' : 'text-slate-500'}>{label}</span>
-            <span className="font-bold">{current} / {max} SKS</span>
+            <span className={darkMode ? 'text-slate-200' : 'text-slate-800'}>{current} / {max} SKS</span>
         </div>
         <div className={`w-full h-2.5 rounded-full ${darkMode ? 'bg-slate-800' : 'bg-slate-200'}`}>
             <div className={`h-full rounded-full transition-all duration-1000 ${colorClass}`} style={{ width: `${Math.min((current/max)*100, 100)}%` }}></div>
@@ -99,128 +78,227 @@ const SimpleLineChart = ({ data, darkMode }) => {
     );
 };
 
-// 5. Error Boundary Component
+// 5. Error Boundary
 class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError(error) {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error, errorInfo) {
-    console.error("UI Error:", error, errorInfo);
-  }
-
+  constructor(props) { super(props); this.state = { hasError: false }; }
+  static getDerivedStateFromError(error) { return { hasError: true }; }
+  componentDidCatch(error, errorInfo) { console.error("UI Error:", error, errorInfo); }
   render() {
-    if (this.state.hasError) {
-      return <div className="p-10 text-center text-red-500 font-bold">Terjadi kesalahan pada tampilan. Silakan refresh halaman.</div>;
-    }
+    if (this.state.hasError) return <div className="p-10 text-center text-red-500 font-bold">Terjadi kesalahan sistem. Silakan refresh halaman.</div>;
     return this.props.children;
   }
 }
 
-// --- MAIN APP COMPONENT ---
+// --- MAIN APP ---
 const App = () => {
     const [activeTab, setActiveTab] = useState('dashboard');
     const [darkMode, setDarkMode] = useState(false);
-    const [history, setHistory] = useState({ 
-        'MA1101': 'A', 'FI1101': 'AB', 'MA1201': 'B' 
-    });
-    const [movedCourses, setMovedCourses] = useState({});
-    const [retakePlan, setRetakePlan] = useState({});
-    const [retakeGrades, setRetakeGrades] = useState({});
+    
+    // State Data
+    const [history, setHistory] = useState({ 'MA1101': 'B' }); // { Code: Grade }
+    const [retakePlan, setRetakePlan] = useState({}); // { Code: TargetSemester }
+    const [plannerSelection, setPlannerSelection] = useState([]); // [Code1, Code2]
+    const [plannerMode, setPlannerMode] = useState('ai'); // 'ai' | 'draft'
     const [profile, setProfile] = useState({ name: 'Mahasiswa', currentSemester: 4, startYear: 2024, targetSpecializations: ['offshore'], sksPerSemesterAssumption: 20 });
+    
+    // Chat State
     const [chatInput, setChatInput] = useState('');
-    const [messages, setMessages] = useState([{ role: 'ai', text: 'Halo! Saya OceanAI. Ada yang bisa saya bantu terkait rencana studimu?' }]);
-    const [plannerMode, setPlannerMode] = useState('recommendation');
-    const [plannerSelection, setPlannerSelection] = useState([]);
-    const chatEndRef = useRef(null);
+    const [messages, setMessages] = useState([{ role: 'ai', text: 'Halo! Saya OceanAI. Siap membantu evaluasi akademikmu.' }]);
     const [isTyping, setIsTyping] = useState(false);
+    const chatEndRef = useRef(null);
 
-    // Ambil variabel global dengan Fallback Aman
-    const GRADES = window.GRADES || {};
-    const TARGET_SKS_LULUS = window.TARGET_SKS_LULUS || 144;
+    // Globals
+    const { CURRICULUM_DB, GRADES, TARGET_SKS_LULUS } = window;
     const TARGET_SKS_WAJIB = window.TARGET_SKS_WAJIB || 100;
     const TARGET_SKS_PILIHAN = window.TARGET_SKS_PILIHAN || 44;
-    // Pastikan CURRICULUM_DB selalu array
-    const CURRICULUM_DB = Array.isArray(window.CURRICULUM_DB) ? window.CURRICULUM_DB : [];
     const SPECIALIZATIONS = window.SPECIALIZATIONS || [];
 
-    // Helper Functions
-    const getCourseSemester = (course) => movedCourses[course.code] !== undefined ? movedCourses[course.code] : course.semester;
+    // Helpers
+    const getCourseSemester = (course) => {
+        // Cek apakah ada di retakePlan (Pindah Semester manual via Retake/Move)
+        // Note: movedCourses dihapus, digabung ke logika umum
+        return course.semester; 
+    };
 
-    // Stats Calculation
-    const semesterStats = useMemo(() => {
-        let totalSks = 0, totalPoints = 0, sw = 0, sp = 0;
-        const semGroups = {};
-        
+    // --- LOGIC UTAMA ---
+
+    // 1. Kalkulasi Statistik & NR (Perbaikan Logika IPK)
+    const stats = useMemo(() => {
+        let cumulativeSks = 0;
+        let cumulativePoints = 0;
+        let sw = 0, sp = 0; // SKS Wajib & Pilihan
+        const semesterData = {}; // { 1: { sks: 0, pts: 0, nr: 0 }, ... }
+        const graphData = [];
+
+        // Inisialisasi semester 1-8
+        for(let i=1; i<=8; i++) semesterData[i] = { sks: 0, pts: 0, nr: 0, count: 0 };
+
         if (Array.isArray(CURRICULUM_DB)) {
             CURRICULUM_DB.forEach(c => {
-                const es = getCourseSemester(c);
-                const g = history[c.code];
-                if (g && GRADES[g] >= 2.0) { if (c.type === 'Wajib') sw += c.sks; else sp += c.sks; }
-                if (g && GRADES[g] !== undefined) {
-                    const points = c.sks * GRADES[g];
-                    totalSks += c.sks;
-                    totalPoints += points;
+                const grade = history[c.code];
+                const originalSemester = c.semester;
+                
+                // Cek apakah matkul ini sedang di-retake (diulang)
+                const isRetaking = retakePlan[c.code]; 
+                
+                // Jika ada nilai, hitung statistik
+                if (grade && GRADES[grade] !== undefined) {
+                    const bobot = GRADES[grade];
+                    const points = c.sks * bobot;
+
+                    // Logika IPK: Hanya hitung jika TIDAK sedang diulang
+                    // Atau jika nilai sudah bagus (>= C) dianggap lulus sementara
+                    // Tapi request user: matkul ngulang gak keitung lulus sampai input nilai baru
                     
-                    if(!semGroups[es]) semGroups[es] = { sks: 0, pts: 0 };
-                    semGroups[es].sks += c.sks;
-                    semGroups[es].pts += points;
+                    if (!isRetaking) {
+                        // Jika lulus (>= 2.0 / C)
+                        if (bobot >= 2.0) {
+                            cumulativeSks += c.sks;
+                            cumulativePoints += points;
+                            
+                            if (c.type === 'Wajib') sw += c.sks; else sp += c.sks;
+                        }
+                        // Jika tidak lulus (D/E), tidak masuk hitungan SKS Lulus, tapi masuk hitungan pembagi IPK?
+                        // Biasanya IPK = Total Mutu / Total SKS Diambil. 
+                        // SKS Lulus = SKS yang nilainya >= C.
+                        // Kita pisahkan:
+                    }
+
+                    // Masukkan data ke semester asal untuk NR Semester (History Nilai)
+                    // NR Semester tetap mencatat nilai D/E
+                    if (semesterData[originalSemester]) {
+                        semesterData[originalSemester].sks += c.sks;
+                        semesterData[originalSemester].pts += points;
+                        semesterData[originalSemester].count += 1;
+                    }
                 }
             });
         }
+
+        // Hitung NR per semester untuk grafik
+        Object.keys(semesterData).sort((a,b)=>a-b).forEach(sem => {
+            const d = semesterData[sem];
+            if (d.sks > 0) {
+                d.nr = d.pts / d.sks;
+                graphData.push({ sem: parseInt(sem), nr: d.nr });
+            }
+        });
+
+        // IPK Total (Total Mutu Seluruh Semester / Total SKS Seluruh Semester yang ada nilainya)
+        // Revisi: Hitung ulang total points dan total sks dari semua history (termasuk E)
+        let totalAllPoints = 0;
+        let totalAllSks = 0;
         
-        const graphData = Object.keys(semGroups).sort((a,b)=>a-b).map(sem => ({
-            sem: sem, nr: semGroups[sem].pts / semGroups[sem].sks
-        }));
+        if (Array.isArray(CURRICULUM_DB)) {
+             CURRICULUM_DB.forEach(c => {
+                const grade = history[c.code];
+                // Jangan hitung matkul yang sedang dalam rencana retake (karena dianggap akan diganti)
+                // ATAU: Tetap hitung nilai lama sampai nilai baru keluar? 
+                // Request user: "matkul ngulang gak keitung matkul selesai" -> Berarti sks lulus berkurang
+                // Tapi IPK biasanya tetap menghitung nilai lama sampai diganti.
+                // Mari kita ikuti: IPK mencerminkan nilai saat ini.
+                
+                if (grade && GRADES[grade] !== undefined) {
+                    totalAllSks += c.sks;
+                    totalAllPoints += (c.sks * GRADES[grade]);
+                }
+             });
+        }
+
+        const ipk = totalAllSks > 0 ? (totalAllPoints / totalAllSks).toFixed(2) : "0.00";
 
         return { 
-            ipk: totalSks > 0 ? (totalPoints/totalSks).toFixed(2) : "0.00", 
-            sks: totalSks,
+            ipk, 
+            sks: cumulativeSks, // SKS Lulus (C ke atas, tidak sedang retake)
             sw, sp,
-            graphData 
+            graphData,
+            semesterData
         };
-    }, [history, CURRICULUM_DB, GRADES, movedCourses]);
+    }, [history, CURRICULUM_DB, GRADES, retakePlan]);
 
+
+    // 2. Logic Rekomendasi (Planner)
+    const plannerData = useMemo(() => {
+        // Matkul yang belum lulus atau sedang diulang
+        const candidates = CURRICULUM_DB.filter(c => {
+            const g = history[c.code];
+            const isPassed = g && GRADES[g] >= 2.0; // Anggap C lulus
+            const isRetaking = retakePlan[c.code]; // Sedang direncanakan ulang
+            return !isPassed || isRetaking;
+        });
+
+        // Mode AI: Urutkan berdasarkan prioritas (misal: prasyarat terpenuhi)
+        const aiRecommendations = candidates.filter(c => {
+            // Cek prasyarat
+            const prereqMet = c.prereq.every(p => history[p] && GRADES[history[p]] >= 1.0); // Minimal D untuk prasyarat (contoh)
+            return prereqMet;
+        }).sort((a,b) => a.semester - b.semester); // Prioritas semester bawah
+
+        // Mode Draft: Semua matkul tersedia (bebas pilih)
+        const draftCatalog = candidates;
+
+        return { aiRecommendations, draftCatalog };
+
+    }, [history, retakePlan, CURRICULUM_DB]);
+
+    // Prediction Logic
     const prediction = useMemo(() => {
-        const rem = Math.max(0, TARGET_SKS_LULUS - semesterStats.sks);
+        const rem = Math.max(0, TARGET_SKS_LULUS - stats.sks);
         const needed = Math.ceil(rem / profile.sksPerSemesterAssumption);
         return { rem, gradYear: profile.startYear + Math.floor((profile.currentSemester + needed - 1) / 2) };
-    }, [semesterStats.sks, profile]);
+    }, [stats.sks, profile]);
 
-    // Filtering Logic
-    const recommendedCourses = useMemo(() => {
-        return CURRICULUM_DB.filter(c => !history[c.code] || GRADES[history[c.code]] < 2.0)
-            .filter(c => c.prereq.every(p => history[p] && GRADES[history[p]] >= 1.0))
-            .sort((a,b) => b.sks - a.sks);
-    }, [history, CURRICULUM_DB]);
+    // --- HANDLERS ---
 
-    const notPassedCourses = useMemo(() => CURRICULUM_DB.filter(c => !history[c.code] || GRADES[history[c.code]] < 2.0), [history, CURRICULUM_DB]);
+    const handleRetake = (code, targetSem) => {
+        setRetakePlan(prev => ({ ...prev, [code]: parseInt(targetSem) }));
+        // Opsional: Reset nilai di history jika mau dianggap 'kosong' saat mengulang
+        // setHistory(prev => { const n = {...prev}; delete n[code]; return n; });
+    };
 
-    // Actions
+    const cancelRetake = (code) => {
+        setRetakePlan(prev => { const n = {...prev}; delete n[code]; return n; });
+    };
+
+    const togglePlannerSelection = (code) => {
+        setPlannerSelection(prev => 
+            prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]
+        );
+    };
+
     const handleSend = async () => {
         if (!chatInput.trim()) return;
-        
-        const userMsg = { role: 'user', text: chatInput };
-        setMessages(prev => [...prev, userMsg]);
+        const ut = chatInput;
+        setMessages(prev => [...prev, { role: 'user', text: ut }]);
         setChatInput('');
         setIsTyping(true);
 
-        const prompt = `OceanAI. IPK: ${semesterStats.ipk}, SKS: ${semesterStats.sks}, Sisa SKS: ${prediction.rem}. Gunakan Markdown yang rapi.`;
+        const prompt = `OceanAI. IPK: ${stats.ipk}, SKS Lulus: ${stats.sks}.`;
         
         if (typeof window.askGemini === 'function') {
-             const responseText = await window.askGemini(chatInput, prompt, messages);
-             setMessages(prev => [...prev, { role: 'ai', text: responseText }]);
+            const reply = await window.askGemini(ut, prompt, messages);
+            setMessages(prev => [...prev, { role: 'ai', text: reply }]);
         } else {
-             setMessages(prev => [...prev, { role: 'ai', text: "Maaf, sistem AI belum siap." }]);
+            setMessages(prev => [...prev, { role: 'ai', text: "Error: AI Service not loaded." }]);
         }
         setIsTyping(false);
     };
+    
+    // Auto Fill
+    const autoFillPreviousSemesters = () => {
+        const nh = { ...history };
+        CURRICULUM_DB.forEach(c => { 
+            if (c.semester < profile.currentSemester && !nh[c.code]) nh[c.code] = 'B'; 
+        });
+        setHistory(nh);
+    };
 
+    // Markdown Renderer
+    const renderMarkdown = (text) => {
+        if (typeof marked !== 'undefined' && marked.parse) return { __html: marked.parse(text) };
+        return { __html: text.replace(/\n/g, '<br/>') };
+    };
+    
     const toggleSpecialization = (id) => {
         const cur = profile.targetSpecializations;
         if (cur.includes(id)) {
@@ -229,32 +307,13 @@ const App = () => {
             setProfile({...profile, targetSpecializations: [...cur, id]});
         }
     };
-    
-    const autoFillPreviousSemesters = () => {
-        const nh = { ...history };
-        CURRICULUM_DB.forEach(c => { if (getCourseSemester(c) < profile.currentSemester && !nh[c.code]) nh[c.code] = 'B'; });
-        setHistory(nh);
-    };
 
-    const moveCourse = (cc, ns) => setMovedCourses(p => ({...p, [cc]: parseInt(ns)}));
-    const planRetake = (cc, ts) => setRetakePlan(p => ({...p, [cc]: parseInt(ts)}));
-    const cancelRetake = (cc) => {
-        const newPlan = {...retakePlan}; delete newPlan[cc]; setRetakePlan(newPlan);
-        const newGrades = {...retakeGrades}; delete newGrades[cc]; setRetakeGrades(newGrades);
-    };
-
-    // Markdown Renderer
-    const renderMarkdown = (text) => {
-        if (typeof marked !== 'undefined' && marked.parse) return { __html: marked.parse(text) };
-        return { __html: text.replace(/\n/g, '<br/>') };
-    };
-
+    // Auto-scroll chat
     useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, isTyping]);
 
-    // Tampilkan Loading jika data belum siap
-    if (CURRICULUM_DB.length === 0) {
-        return <div className="min-h-screen flex items-center justify-center text-slate-500 font-bold animate-pulse">Memuat Data Kurikulum...</div>;
-    }
+
+    // --- RENDER ---
+    if (!CURRICULUM_DB.length) return <div className="p-10 text-center">Loading Database...</div>;
 
     return (
         <div className={`min-h-screen ${darkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'} transition-colors duration-300`}>
@@ -271,11 +330,8 @@ const App = () => {
 
             {/* Nav */}
             <nav className="max-w-5xl mx-auto p-4 flex gap-2 overflow-x-auto scrollbar-hide">
-                {['dashboard', 'input', 'planner', 'library', 'assistant'].map(tab => (
-                    <button 
-                        key={tab} onClick={() => setActiveTab(tab)}
-                        className={`px-6 py-2.5 rounded-2xl font-bold text-sm capitalize transition-all ${activeTab === tab ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white dark:bg-slate-900 border dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-                    >
+                {['dashboard', 'input', 'planner', 'assistant'].map(tab => (
+                    <button key={tab} onClick={() => setActiveTab(tab)} className={`px-6 py-2.5 rounded-2xl font-bold text-sm capitalize transition-all ${activeTab === tab ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white dark:bg-slate-900 border dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                         {tab}
                     </button>
                 ))}
@@ -287,255 +343,226 @@ const App = () => {
                 {/* DASHBOARD */}
                 {activeTab === 'dashboard' && (
                     <div className="space-y-6">
-                        {/* Top Card: Profile & Config */}
-                        <Card darkMode={darkMode} className={`relative overflow-hidden shadow-2xl ${darkMode ? 'bg-indigo-900 border-none text-white' : 'bg-white text-slate-900 border-slate-200'}`}>
-                            <div className="relative z-10 grid md:grid-cols-2 gap-8">
-                                <div>
-                                    <h2 className="text-3xl font-black mb-2">Halo, {profile.name}!</h2>
-                                    <p className={`opacity-80 text-sm mb-6 ${darkMode ? 'text-indigo-200' : 'text-slate-500'}`}>Pusat Konfigurasi Akademik.</p>
-                                    
-                                    <div className={`p-5 rounded-2xl border backdrop-blur-md ${darkMode ? 'bg-white/10 border-white/20' : 'bg-slate-50 border-slate-200'}`}>
-                                        <label className="text-[10px] font-black uppercase tracking-widest opacity-70 mb-2 block">Semester Berjalan:</label>
-                                        <select 
-                                            value={profile.currentSemester} 
-                                            onChange={(e)=>setProfile({...profile, currentSemester: parseInt(e.target.value)})} 
-                                            className={`w-full p-3 rounded-xl font-black text-sm outline-none cursor-pointer ${darkMode ? 'bg-indigo-800 text-white' : 'bg-white text-indigo-700 border border-slate-200'}`}
-                                        >
-                                            {[1,2,3,4,5,6,7,8].map(s => <option key={s} value={s}>Semester {s}</option>)}
-                                        </select>
-                                    </div>
+                        <Card darkMode={darkMode}>
+                            <h2 className="text-3xl font-black mb-6">Statistik Akademik</h2>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="p-6 rounded-3xl bg-indigo-500/10 text-center border border-indigo-500/20">
+                                    <p className="text-[10px] font-black uppercase text-indigo-500 mb-1 tracking-widest">IPK Kumulatif</p>
+                                    <p className="text-4xl font-black text-indigo-600">{stats.ipk}</p>
                                 </div>
-
-                                <div className="flex flex-col justify-between">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className={`p-4 rounded-2xl text-center border ${darkMode ? 'bg-white/10 border-white/20' : 'bg-indigo-50 border-indigo-100'}`}>
-                                            <p className="text-[9px] font-black uppercase opacity-60">IPK</p>
-                                            <p className={`text-3xl font-black ${darkMode ? 'text-white' : 'text-indigo-600'}`}>{semesterStats.ipk}</p>
-                                        </div>
-                                        <div className={`p-4 rounded-2xl text-center border ${darkMode ? 'bg-white/10 border-white/20' : 'bg-emerald-50 border-emerald-100'}`}>
-                                            <p className="text-[9px] font-black uppercase opacity-60">SKS Lulus</p>
-                                            <p className={`text-3xl font-black ${darkMode ? 'text-white' : 'text-emerald-600'}`}>{semesterStats.sks}</p>
-                                        </div>
-                                    </div>
-                                    <div className={`p-5 rounded-2xl border mt-4 ${darkMode ? 'bg-indigo-950/50 border-white/10' : 'bg-slate-50 border-slate-200'}`}>
-                                        <div className="flex justify-between items-center mb-2">
-                                            <span className="text-[10px] font-black uppercase tracking-widest">Prediksi Wisuda</span>
-                                            <span className="text-2xl font-black text-amber-500">{prediction.gradYear}</span>
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                            <span className="text-[9px] font-bold">Asumsi {profile.sksPerSemesterAssumption} SKS/Sem</span>
-                                            <input 
-                                                type="range" min="12" max="24" 
-                                                value={profile.sksPerSemesterAssumption} 
-                                                onChange={(e)=>setProfile({...profile, sksPerSemesterAssumption: parseInt(e.target.value)})} 
-                                                className="flex-1 accent-indigo-600 h-1.5 bg-slate-200 rounded-full"
-                                            />
-                                        </div>
-                                    </div>
+                                <div className="p-6 rounded-3xl bg-emerald-500/10 text-center border border-emerald-500/20">
+                                    <p className="text-[10px] font-black uppercase text-emerald-500 mb-1 tracking-widest">SKS Lulus</p>
+                                    <p className="text-4xl font-black text-emerald-600">{stats.sks}</p>
                                 </div>
                             </div>
                         </Card>
-
+                        
                         <div className="grid md:grid-cols-2 gap-6">
                             <Card darkMode={darkMode}>
-                                <h3 className="font-bold mb-6 flex items-center gap-2 text-sm uppercase tracking-widest opacity-60"><Icon name="TrendingUp" size={16}/> Grafik Performa</h3>
-                                <SimpleLineChart data={semesterStats.graphData} darkMode={darkMode} />
+                                <h3 className="font-bold mb-6 flex items-center gap-2 text-sm uppercase tracking-widest opacity-60"><Icon name="TrendingUp" size={16}/> NR Per Semester</h3>
+                                {stats.graphData.length > 0 ? (
+                                     <SimpleLineChart data={stats.graphData} darkMode={darkMode} />
+                                ) : (
+                                    <div className="h-32 flex items-center justify-center text-xs opacity-40">Belum ada data nilai semester</div>
+                                )}
                             </Card>
                             <Card darkMode={darkMode}>
-                                <h3 className="font-bold mb-6 flex items-center gap-2 text-sm uppercase tracking-widest opacity-60"><Icon name="PieChart" size={16}/> Progres Kelulusan</h3>
-                                <ProgressBar label="Total SKS (144)" current={semesterStats.sks} max={TARGET_SKS_LULUS} colorClass="bg-indigo-600" darkMode={darkMode} />
-                                <ProgressBar label="Wajib Dasar" current={semesterStats.sw} max={TARGET_SKS_WAJIB} colorClass="bg-emerald-500" darkMode={darkMode} />
-                                <ProgressBar label="Pilihan Bidang" current={semesterStats.sp} max={TARGET_SKS_PILIHAN} colorClass="bg-orange-500" darkMode={darkMode} />
+                                <h3 className="font-bold mb-6 flex items-center gap-2 text-sm uppercase tracking-widest opacity-60"><Icon name="PieChart" size={16}/> Progres Studi</h3>
+                                <ProgressBar label="Total SKS (144)" current={stats.sks} max={TARGET_SKS_LULUS} colorClass="bg-indigo-600" darkMode={darkMode} />
+                                <ProgressBar label="Wajib Dasar" current={stats.sw} max={window.TARGET_SKS_WAJIB} colorClass="bg-emerald-500" darkMode={darkMode} />
+                                <ProgressBar label="Pilihan Bidang" current={stats.sp} max={window.TARGET_SKS_PILIHAN} colorClass="bg-orange-500" darkMode={darkMode} />
                             </Card>
                         </div>
-                        
-                        <Card darkMode={darkMode}>
-                            <h3 className="font-bold mb-4 text-sm uppercase tracking-widest opacity-60">
-                                Spesialisasi Fokus (Pilih Max 3)
-                                <span className="ml-2 text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">{profile.targetSpecializations.length}/3</span>
-                            </h3>
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                {SPECIALIZATIONS.map(s => {
-                                    const isSel = profile.targetSpecializations.includes(s.id);
-                                    return (
-                                        <button 
-                                            key={s.id} onClick={()=>toggleSpecialization(s.id)}
-                                            className={`p-4 rounded-2xl border text-left text-xs transition-all ${isSel ? 'bg-indigo-600 text-white border-indigo-600 shadow-md ring-2 ring-indigo-200' : 'hover:bg-slate-50 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-800'}`}
-                                        >
-                                            <span className="block font-bold mb-1 text-sm">{s.name}</span>
-                                            <span className={`block text-[10px] opacity-60 ${isSel ? 'text-indigo-100' : ''}`}>{s.desc}</span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </Card>
                     </div>
                 )}
 
-                {/* INPUT TRANSKRIP */}
+                {/* INPUT TRANSKRIP & RETAKE */}
                 {activeTab === 'input' && (
                     <div className="space-y-6">
                         <Card darkMode={darkMode}>
-                            <div className="flex justify-between items-center mb-6">
-                                <div>
-                                    <h2 className="text-xl font-black">Input Transkrip</h2>
-                                    <p className="opacity-60 text-xs">Isi nilai mata kuliah yang telah diselesaikan.</p>
-                                </div>
-                                <button onClick={autoFillPreviousSemesters} className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-lg hover:bg-indigo-700 transition-colors">Auto-Fill TPB</button>
+                            <div className="flex justify-between items-center mb-4">
+                                <h2 className="text-xl font-black">Transkrip Nilai</h2>
+                                <button onClick={autoFillPreviousSemesters} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700">Auto-Fill TPB</button>
                             </div>
-                            
-                            <div className="space-y-8">
-                                {[1,2,3,4,5,6,7,8].map(s => {
-                                    const courses = CURRICULUM_DB.filter(c => getCourseSemester(c) === s);
-                                    if (courses.length === 0) return null;
 
-                                    return (
-                                        <div key={s} className="border rounded-2xl p-1 dark:border-slate-800">
-                                            <div className={`px-4 py-2 font-black text-xs uppercase tracking-widest border-b ${darkMode ? 'bg-slate-800/50 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-100 text-slate-500'}`}>
-                                                Semester {s}
-                                            </div>
-                                            <div className="divide-y dark:divide-slate-800">
-                                                {courses.map(c => {
-                                                    const g = history[c.code] || "";
-                                                    const isSpec = isSpecializationCourse(c.code);
-                                                    return (
-                                                        <div key={c.code} className="flex justify-between items-center p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                                                            <div>
-                                                                <div className="font-bold text-sm flex items-center gap-2">
-                                                                    <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 opacity-70">{c.code}</span>
-                                                                    {c.name}
-                                                                </div>
-                                                                <div className="text-[10px] opacity-50 mt-1 uppercase font-bold tracking-wider">{c.sks} SKS • {c.type}</div>
-                                                            </div>
-                                                            <div className="flex items-center gap-2">
-                                                                <div className="relative group">
-                                                                    <button className="p-1.5 text-slate-400 hover:text-indigo-600"><Icon name="Move" size={14}/></button>
-                                                                    <div className="absolute right-0 top-full mt-1 hidden group-hover:grid grid-cols-4 gap-1 p-2 bg-white dark:bg-slate-800 border dark:border-slate-700 shadow-xl rounded-xl z-30 w-40">{[1,2,3,4,5,6,7,8].map(ns => <button key={ns} onClick={()=>moveCourse(c.code, ns)} className={`w-8 h-8 flex items-center justify-center rounded-lg text-[10px] font-bold ${ns===s?'bg-indigo-600 text-white':'hover:bg-slate-100 dark:hover:bg-slate-700'}`}>{ns}</button>)}</div>
-                                                                </div>
-                                                                <select 
-                                                                    value={g} 
-                                                                    onChange={(e) => setHistory({...history, [c.code]: e.target.value})}
-                                                                    className={`bg-transparent border rounded-xl px-3 py-2 text-sm outline-none font-bold cursor-pointer ${darkMode ? 'border-slate-700 bg-slate-800 hover:border-slate-600' : 'border-slate-200 bg-white hover:border-slate-300'}`}
-                                                                >
-                                                                    <option value="">-</option>
-                                                                    {Object.keys(GRADES).map(g => <option key={g} value={g}>{g}</option>)}
-                                                                </select>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </Card>
-                    </div>
-                )}
-                
-                {/* STRATEGI (PLANNER) */}
-                {activeTab === 'planner' && (
-                    <div className="grid md:grid-cols-2 gap-4 h-[600px]">
-                        <div className="flex flex-col gap-2 overflow-hidden">
-                            <div className="flex justify-between items-center px-2 py-1">
-                                <h3 className="font-bold text-xs flex items-center gap-2 tracking-tight uppercase opacity-50">Saran Pengambilan</h3>
-                                <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
-                                    <button onClick={()=>setPlannerMode('recommendation')} className={`text-[9px] px-2 py-1 rounded-md font-bold ${plannerMode==='recommendation'?'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-300':'opacity-40'}`}>AI</button>
-                                    <button onClick={()=>setPlannerMode('catalog')} className={`text-[9px] px-2 py-1 rounded-md font-bold ${plannerMode==='catalog'?'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-300':'opacity-40'}`}>ALL</button>
-                                </div>
-                            </div>
-                            <div className="flex-1 overflow-y-auto space-y-1.5 pr-2 scrollbar-hide">
-                                {(plannerMode === 'recommendation' ? recommendedCourses : notPassedCourses).filter(c => !plannerSelection.includes(c.code)).map(c => (
-                                    <div key={c.code} className="p-3 border dark:border-slate-800 rounded-xl flex justify-between items-center bg-white dark:bg-slate-900 shadow-sm">
-                                        <div><p className="font-bold text-[10px] leading-tight mb-0.5">{c.name}</p><p className="text-[8px] opacity-40 uppercase font-bold tracking-wider">{c.code} • S{c.semester}</p></div>
-                                        <button onClick={()=>setPlannerSelection([...plannerSelection, c.code])} className="p-1.5 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 rounded-lg border border-indigo-100 dark:border-indigo-800"><Icon name="Plus" size={12}/></button>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                        <div className="flex flex-col gap-2 overflow-hidden">
-                            <div className="flex justify-between items-center px-2 py-1">
-                                <h3 className="font-bold text-xs flex items-center gap-2 tracking-tight uppercase opacity-50">Draft Rencana</h3>
-                                <span className="text-[10px] font-black bg-indigo-600 text-white px-2 py-1 rounded-lg shadow-lg">{plannerSelection.reduce((a,c)=>a+(CURRICULUM_DB.find(x=>x.code===c)?.sks||0),0)} SKS</span>
-                            </div>
-                            <div className={`flex-1 bg-slate-100 dark:bg-slate-900/30 rounded-2xl p-3 overflow-y-auto space-y-1.5 border-2 border-dashed dark:border-slate-800`}>
-                                {plannerSelection.map(cc => {
-                                    const c = CURRICULUM_DB.find(x=>x.code===cc);
-                                    return (
-                                        <div key={cc} className="p-3 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl flex justify-between items-center animate-in shadow-sm">
-                                            <div><p className="font-bold text-[10px] leading-none mb-0.5">{c.name}</p><p className="text-[8px] opacity-40 font-bold uppercase tracking-wider">{c.code}</p></div>
-                                            <button onClick={()=>setPlannerSelection(plannerSelection.filter(x=>x!==cc))} className="p-1 text-rose-400 hover:text-rose-600"><Icon name="X" size={14}/></button>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    </div>
-                )}
-                
-                {/* LIBRARY */}
-                {activeTab === 'library' && (
-                    <div className="space-y-3">
-                         <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 p-4 rounded-2xl flex justify-between items-center shadow-sm">
-                            <div><h2 className="text-sm font-black uppercase tracking-widest leading-none">Katalog Kurikulum</h2><p className="text-[9px] opacity-50 mt-1.5 font-bold uppercase tracking-tighter leading-none">Highlight Amber menandakan syarat Wajib Bidang.</p></div>
-                            <Icon name="Database" size={28} className="text-indigo-600 opacity-40" />
-                        </div>
-                        <div className="grid sm:grid-cols-2 gap-3">
-                            {[1,2,3,4,5,6,7,8].map(s => {
-                                const courses = CURRICULUM_DB.filter(c => c.semester === s);
+                            {/* List Semester */}
+                            {[1,2,3,4,5,6,7,8].map(sem => {
+                                const courses = CURRICULUM_DB.filter(c => c.semester === sem);
+                                const semNr = stats.semesterData?.[sem]?.nr || 0;
+                                
                                 return (
-                                    <Card key={s} darkMode={darkMode} className="overflow-hidden">
-                                        <div className="p-2 bg-slate-50 dark:bg-slate-800 font-black text-[10px] flex justify-between uppercase tracking-widest border-b dark:border-slate-700 leading-none"><span>SEM {s}</span><span className="opacity-40">{courses.reduce((a,b)=>a+b.sks, 0)} SKS</span></div>
+                                    <div key={sem} className="mb-6 border rounded-2xl overflow-hidden dark:border-slate-800">
+                                        <div className={`p-3 flex justify-between items-center ${darkMode ? 'bg-slate-800/50' : 'bg-slate-50'}`}>
+                                            <span className="font-bold text-xs uppercase tracking-wider">Semester {sem}</span>
+                                            {semNr > 0 && <span className="text-[10px] font-bold bg-white dark:bg-slate-900 px-2 py-1 rounded border dark:border-slate-700">NR: {semNr.toFixed(2)}</span>}
+                                        </div>
                                         <div className="divide-y dark:divide-slate-800">
                                             {courses.map(c => {
-                                                const spec = getSpecName(c.code);
+                                                const g = history[c.code] || "";
+                                                const isFailed = g && GRADES[g] < 2.0; // D, E, T
+                                                const isRetaking = retakePlan[c.code];
+
                                                 return (
-                                                    <div key={c.code} className={`p-2 flex justify-between items-center text-[10px] ${spec ? 'bg-amber-500/5 dark:bg-amber-500/10' : ''}`}>
-                                                        <div className="flex-1 pr-2 min-w-0">
-                                                            <div className="flex items-center gap-1.5 mb-0.5 leading-none">
-                                                                <span className={`font-mono text-[7px] px-1 rounded font-bold ${spec ? 'bg-amber-500 text-white' : 'opacity-40 bg-slate-100 dark:bg-slate-800'}`}>{c.code}</span>
-                                                                <span className={`font-bold truncate ${spec ? 'text-amber-600 dark:text-amber-400' : 'opacity-80'}`}>{c.name}</span>
+                                                    <div key={c.code} className={`p-3 flex justify-between items-center ${isRetaking ? 'bg-amber-50 dark:bg-amber-900/10' : ''}`}>
+                                                        <div className="flex-1">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-mono text-[10px] opacity-50">{c.code}</span>
+                                                                <span className="font-bold text-xs">{c.name}</span>
                                                             </div>
-                                                            {spec && <p className="text-[7px] font-black text-amber-500 uppercase tracking-tighter flex items-center gap-1 leading-none mt-1"><Icon name="Zap" size={8}/> {spec}</p>}
+                                                            <div className="flex items-center gap-2 mt-1">
+                                                                <span className="text-[9px] opacity-40 uppercase font-bold tracking-wider">{c.sks} SKS</span>
+                                                                {isRetaking && <span className="text-[8px] bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded font-bold">RETAKE DI SEM {isRetaking}</span>}
+                                                            </div>
                                                         </div>
-                                                        <span className="font-bold opacity-30 text-[9px]">{c.sks}</span>
+                                                        
+                                                        <div className="flex items-center gap-2">
+                                                            {/* Tombol Retake jika Gagal */}
+                                                            {isFailed && !isRetaking && (
+                                                                <div className="relative group">
+                                                                    <button className="p-1.5 text-red-400 hover:text-red-600 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                                                                        <Icon name="RotateCcw" size={14}/>
+                                                                    </button>
+                                                                    {/* Popup Pilih Semester Retake */}
+                                                                    <div className="absolute right-0 top-full mt-1 hidden group-hover:flex bg-white dark:bg-slate-800 border dark:border-slate-700 shadow-xl rounded-xl z-30 p-1 flex-wrap w-32 gap-1">
+                                                                         {[1,2,3,4,5,6,7,8].map(rSem => (
+                                                                             <button 
+                                                                                key={rSem}
+                                                                                onClick={() => handleRetake(c.code, rSem)}
+                                                                                className="w-6 h-6 text-[10px] flex items-center justify-center hover:bg-indigo-100 dark:hover:bg-indigo-900 rounded"
+                                                                             >{rSem}</button>
+                                                                         ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                            
+                                                            {isRetaking && (
+                                                                <button onClick={() => cancelRetake(c.code)} className="p-1.5 text-slate-400 hover:text-slate-600">
+                                                                    <Icon name="X" size={14}/>
+                                                                </button>
+                                                            )}
+
+                                                            <select 
+                                                                value={g} 
+                                                                onChange={(e) => setHistory({...history, [c.code]: e.target.value})}
+                                                                className={`bg-transparent border rounded-lg px-2 py-1 text-xs font-bold outline-none cursor-pointer ${darkMode ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'}`}
+                                                            >
+                                                                <option value="">-</option>
+                                                                {Object.keys(GRADES).map(key => <option key={key} value={key}>{key}</option>)}
+                                                            </select>
+                                                        </div>
                                                     </div>
                                                 );
                                             })}
                                         </div>
-                                    </Card>
+                                    </div>
                                 );
                             })}
+                        </div>
+                    </Card>
+                )}
+
+                {/* PLANNER (DUA MODE: AI vs DRAFT) */}
+                {activeTab === 'planner' && (
+                    <div className="grid md:grid-cols-2 gap-4 h-[600px]">
+                        {/* Kolom Kiri: Katalog / Rekomendasi */}
+                        <div className="flex flex-col gap-3">
+                            <div className="flex justify-between items-center">
+                                <h3 className="font-bold text-sm">Katalog Matkul</h3>
+                                <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+                                    <button 
+                                        onClick={() => setPlannerMode('ai')}
+                                        className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${plannerMode === 'ai' ? 'bg-white dark:bg-slate-700 shadow text-indigo-600' : 'opacity-50'}`}
+                                    >
+                                        Rekomendasi AI
+                                    </button>
+                                    <button 
+                                        onClick={() => setPlannerMode('draft')}
+                                        className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${plannerMode === 'draft' ? 'bg-white dark:bg-slate-700 shadow text-indigo-600' : 'opacity-50'}`}
+                                    >
+                                        Semua (Draft)
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div className="flex-1 overflow-y-auto space-y-2 pr-2 scrollbar-hide">
+                                {(plannerMode === 'ai' ? plannerData.aiRecommendations : plannerData.draftCatalog)
+                                    .filter(c => !plannerSelection.includes(c.code))
+                                    .map(c => (
+                                    <div key={c.code} className="p-3 border dark:border-slate-800 rounded-xl flex justify-between items-center bg-white dark:bg-slate-900 shadow-sm hover:border-indigo-400 transition-colors">
+                                        <div>
+                                            <p className="font-bold text-[11px] leading-tight mb-0.5">{c.name}</p>
+                                            <p className="text-[9px] opacity-40 uppercase font-bold tracking-wider">
+                                                {c.code} • {c.sks} SKS • Sem {c.semester}
+                                                {retakePlan[c.code] && <span className="text-amber-500 ml-1">(RETAKE)</span>}
+                                            </p>
+                                        </div>
+                                        <button onClick={() => togglePlannerSelection(c.code)} className="p-1.5 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 rounded-lg"><Icon name="Plus" size={14}/></button>
+                                    </div>
+                                ))}
+                                {plannerMode === 'ai' && plannerData.aiRecommendations.length === 0 && (
+                                    <div className="text-center p-4 opacity-50 text-xs">Semua rekomendasi sudah diambil atau tidak ada.</div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Kolom Kanan: Draft Rencana User */}
+                        <div className="flex flex-col gap-3">
+                            <div className="flex justify-between items-center">
+                                <h3 className="font-bold text-sm">Draft Rencana Kamu</h3>
+                                <span className="text-[10px] font-black bg-indigo-600 text-white px-2 py-1 rounded-lg">
+                                    Total: {plannerSelection.reduce((a,c) => a + (CURRICULUM_DB.find(x=>x.code===c)?.sks||0), 0)} SKS
+                                </span>
+                            </div>
+                            <div className="flex-1 bg-slate-100 dark:bg-slate-900/30 rounded-2xl p-3 overflow-y-auto space-y-2 border-2 border-dashed dark:border-slate-800">
+                                {plannerSelection.length === 0 && (
+                                    <div className="h-full flex flex-col items-center justify-center opacity-30">
+                                        <Icon name="Target" size={32}/>
+                                        <p className="text-xs mt-2 font-bold">Belum ada matkul dipilih</p>
+                                    </div>
+                                )}
+                                {plannerSelection.map(cc => {
+                                    const c = CURRICULUM_DB.find(x=>x.code===cc);
+                                    return (
+                                        <div key={cc} className="p-3 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl flex justify-between items-center animate-in shadow-sm">
+                                            <div>
+                                                <p className="font-bold text-[11px] leading-none mb-0.5">{c.name}</p>
+                                                <p className="text-[9px] opacity-40 font-bold uppercase tracking-wider">{c.code} • {c.sks} SKS</p>
+                                            </div>
+                                            <button onClick={() => togglePlannerSelection(cc)} className="p-1 text-red-400 hover:text-red-600"><Icon name="X" size={14}/></button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         </div>
                     </div>
                 )}
 
+                {/* AI ASSISTANT */}
                 {activeTab === 'assistant' && (
                     <Card darkMode={darkMode} className="h-[600px] flex flex-col p-0 overflow-hidden border-2 shadow-2xl">
-                        <div className="bg-indigo-600 p-6 text-white flex items-center gap-4">
-                            <div className="bg-white/20 p-2 rounded-xl"><Icon name="Bot" size={24}/></div>
-                            <div><h3 className="font-bold">OceanAI</h3><p className="text-xs opacity-70">Academic Assistant</p></div>
+                        <div className="bg-indigo-600 p-4 text-white flex items-center gap-3">
+                            <div className="bg-white/20 p-2 rounded-xl"><Icon name="Bot" size={20}/></div>
+                            <div><h3 className="font-bold text-sm">OceanAI</h3><p className="text-[10px] opacity-70">Academic Assistant</p></div>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50 dark:bg-slate-950/50">
+                        <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50 dark:bg-slate-950/50">
                             {messages.map((m, i) => (
                                 <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                    <div 
-                                        className={`p-4 rounded-2xl max-w-[85%] text-sm shadow-md markdown-content ${m.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-white dark:bg-slate-900 border dark:border-slate-700 text-slate-800 dark:text-slate-100 rounded-tl-none border-slate-200 shadow-sm'}`}
-                                        dangerouslySetInnerHTML={renderMarkdown(m.text)}
-                                    />
+                                    <div className={`p-3 rounded-2xl max-w-[85%] text-xs shadow-md ${m.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-white dark:bg-slate-800 border dark:border-slate-700 text-slate-800 dark:text-slate-100 rounded-tl-none'}`}>
+                                        {m.text}
+                                    </div>
                                 </div>
                             ))}
                             {isTyping && <div className="text-xs opacity-50 p-2 animate-pulse">Mengetik...</div>}
                             <div ref={chatEndRef} />
                         </div>
-                        <div className="p-4 border-t dark:border-slate-800 flex gap-3 bg-white dark:bg-slate-900">
+                        <div className="p-3 border-t dark:border-slate-800 flex gap-2 bg-white dark:bg-slate-900">
                             <input 
                                 value={chatInput} onChange={(e) => setChatInput(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                                className="flex-1 p-3 rounded-xl border dark:border-slate-700 dark:bg-slate-800 outline-none text-sm font-medium"
+                                className="flex-1 p-2 rounded-xl border dark:border-slate-700 dark:bg-slate-800 outline-none text-xs font-medium"
                                 placeholder="Tanya sesuatu..."
                             />
-                            <button onClick={handleSend} className="p-3 bg-indigo-600 text-white rounded-xl shadow-lg hover:scale-105 transition-transform"><Icon name="Send" size={20}/></button>
+                            <button onClick={handleSend} className="p-2 bg-indigo-600 text-white rounded-xl shadow-lg"><Icon name="Send" size={16}/></button>
                         </div>
                     </Card>
                 )}
@@ -548,7 +575,7 @@ const App = () => {
 const container = document.getElementById('root');
 if (container) {
     if (!container._reactRoot) {
-        container._reactRoot = ReactDOM.createRoot(container);
+        container._reactRoot = createRoot(container);
     }
     const root = container._reactRoot;
     
