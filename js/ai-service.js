@@ -1,5 +1,5 @@
 // js/ai-service.js
-const askGemini = async (userQuery, systemPrompt, chatHistory = []) => {
+window.askGemini = async (userQuery, systemPrompt, chatHistory = []) => {
     const contents = chatHistory.map(msg => ({
         role: msg.role === 'user' ? 'user' : 'model',
         parts: [{ text: msg.text }]
